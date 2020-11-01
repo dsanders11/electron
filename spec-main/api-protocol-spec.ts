@@ -510,6 +510,44 @@ describe('protocol module', () => {
       interceptStringProtocol('http', (request, callback: any) => callback());
       await expect(ajax('http://fake-host')).to.be.eventually.rejectedWith(Error, '404');
     });
+
+    xit('matches Chromium behavior on POST redirects', async () => {
+      const expectedMethods = new Map([[302, 'GET'], [303, 'GET'], [307, 'post']]);
+
+      for (const [redirectStatusCode, expectedMethod] of expectedMethods.entries()) {
+        interceptStringProtocol('http', (request, callback) => {
+          if (request.url.endsWith('/redirect')) {
+            if (request.method !== 'POST') {
+              callback({ statusCode: 405 });
+            } else {
+              callback({
+                statusCode: redirectStatusCode,
+                headers: {
+                  Location: 'http://fake-host'
+                }
+              });
+            }
+          } else {
+            if (request.method !== expectedMethod) {
+              callback({ statusCode: 405 });
+            } else {
+              callback(text);
+            }
+          }
+        });
+
+        // const r = await ajax('http://fake-host/redirect', { type: 'POST', data: postData });
+        // expect(r.data).to.equal(text);
+
+        const url = 'http://fake-host/redirect';
+        await contents.loadURL(`file://${fixturesPath}/pages/blank.html`);
+        const options = { method: 'POST', body: postData };
+        const data = await contents.executeJavaScript(`fetch(${JSON.stringify(url)}, ${JSON.stringify(options)}).then(r => r.data)`);
+        expect(data).to.equal(text);
+
+        uninterceptProtocol('http');
+      }
+    });
   });
 
   describe('protocol.interceptStringProtocol', () => {
