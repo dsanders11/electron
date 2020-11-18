@@ -210,6 +210,8 @@ test_script:
       } else {
         echo "Skipping tests for $env:GN_CONFIG build"
       }
+  - npm install -g mocha-appveyor-reporter
+  - ps: $env:ELECTRON_TEST_EXTRA_MODULE_PATHS = node root -g
   - cd electron
   # CalculateNativeWinOcclusion is disabled due to https://bugs.chromium.org/p/chromium/issues/detail?id=1139022
   - if "%RUN_TESTS%"=="true" ( echo Running test suite & node script/yarn test -- --trace-uncaught --enable-logging --disable-features=CalculateNativeWinOcclusion )
