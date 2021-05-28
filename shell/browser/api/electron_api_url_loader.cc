@@ -5,7 +5,6 @@
 #include "shell/browser/api/electron_api_url_loader.h"
 
 #include <algorithm>
-#include <map>
 #include <memory>
 #include <string>
 #include <utility>
@@ -29,7 +28,7 @@
 #include "shell/common/gin_converters/gurl_converter.h"
 #include "shell/common/gin_converters/net_converter.h"
 #include "shell/common/gin_helper/dictionary.h"
-#include "shell/common/gin_helper/object_template_builder.h"
+#include "shell/common/gin_helper/promise.h"
 #include "shell/common/node_includes.h"
 
 namespace gin {

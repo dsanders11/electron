@@ -11,10 +11,8 @@
 #include "base/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "components/viz/host/client_frame_sink_video_capturer.h"
-#include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
-#include "v8/include/v8.h"
 
 namespace gfx {
 class Image;

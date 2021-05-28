@@ -13,7 +13,7 @@
 #include <memory>
 #include <string>
 
-#include "base/command_line.h"
+#include "base/callback_forward.h"
 #include "base/macros.h"
 #include "chrome/browser/browser_process.h"
 #include "components/prefs/pref_service.h"

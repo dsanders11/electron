@@ -5,10 +5,8 @@
 #ifndef SHELL_BROWSER_NATIVE_BROWSER_VIEW_MAC_H_
 #define SHELL_BROWSER_NATIVE_BROWSER_VIEW_MAC_H_
 
-#import <Cocoa/Cocoa.h>
 #include <vector>
 
-#include "base/mac/scoped_nsobject.h"
 #include "shell/browser/native_browser_view.h"
 
 namespace electron {

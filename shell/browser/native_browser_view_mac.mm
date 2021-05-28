@@ -4,9 +4,12 @@
 
 #include "shell/browser/native_browser_view_mac.h"
 
-#import <objc/runtime.h>
 #include <vector>
 
+#import <Cocoa/Cocoa.h>
+#import <objc/runtime.h>
+
+#include "base/mac/scoped_nsobject.h"
 #include "shell/browser/ui/drag_util.h"
 #include "shell/browser/ui/inspectable_web_contents.h"
 #include "shell/browser/ui/inspectable_web_contents_view.h"

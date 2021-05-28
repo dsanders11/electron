@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-#include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/system/data_pipe_producer.h"
 #include "services/network/public/cpp/simple_url_loader.h"

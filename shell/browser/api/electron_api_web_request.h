@@ -8,7 +8,6 @@
 #include <map>
 #include <set>
 
-#include "base/values.h"
 #include "extensions/common/url_pattern.h"
 #include "gin/arguments.h"
 #include "gin/handle.h"

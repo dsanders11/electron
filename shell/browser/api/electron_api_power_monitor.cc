@@ -12,6 +12,7 @@
 #include "shell/common/gin_helper/dictionary.h"
 #include "shell/common/gin_helper/object_template_builder.h"
 #include "shell/common/node_includes.h"
+#include "ui/base/idle/idle.h"
 
 namespace gin {
 

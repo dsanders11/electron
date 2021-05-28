@@ -6,8 +6,6 @@
 
 #include <utility>
 
-#include "shell/common/api/object_life_monitor.h"
-
 namespace electron {
 
 namespace api {

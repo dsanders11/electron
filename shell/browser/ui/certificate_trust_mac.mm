@@ -15,6 +15,7 @@
 #include "net/cert/cert_database.h"
 #include "net/cert/x509_util_ios_and_mac.h"
 #include "net/cert/x509_util_mac.h"
+#include "shell/browser/javascript_environment.h"
 #include "shell/browser/native_window.h"
 
 @interface TrustDelegate : NSObject {

@@ -12,7 +12,6 @@
 #include <vector>
 
 #include "base/files/file_path.h"
-#include "base/synchronization/lock.h"
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/render_process_host_observer.h"
 #include "content/public/browser/web_contents.h"
@@ -21,7 +20,6 @@
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "shell/browser/bluetooth/electron_bluetooth_delegate.h"
 #include "shell/browser/serial/electron_serial_delegate.h"
-#include "third_party/blink/public/mojom/badging/badging.mojom-forward.h"
 
 namespace content {
 class ClientCertificateDelegate;

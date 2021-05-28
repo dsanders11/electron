@@ -13,7 +13,7 @@
 #include "gin/wrappable.h"
 #include "shell/browser/event_emitter_mixin.h"
 #include "shell/common/gin_helper/error_thrower.h"
-#include "shell/common/gin_helper/promise.h"
+#include "v8/include/v8.h"
 
 #if defined(OS_WIN)
 #include "shell/browser/browser.h"

@@ -14,10 +14,11 @@
 #include "base/observer_list.h"
 #include "base/task/cancelable_task_tracker.h"
 #include "base/values.h"
-#include "gin/dictionary.h"
+#include "gin/arguments.h"
 #include "shell/browser/browser_observer.h"
 #include "shell/browser/window_list_observer.h"
 #include "shell/common/gin_helper/promise.h"
+#include "url/gurl.h"
 
 #if defined(OS_WIN)
 #include <windows.h>

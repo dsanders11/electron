@@ -5,13 +5,12 @@
 #ifndef SHELL_BROWSER_EXTENSIONS_ELECTRON_EXTENSION_LOADER_H_
 #define SHELL_BROWSER_EXTENSIONS_ELECTRON_EXTENSION_LOADER_H_
 
-#include <memory>
 #include <string>
 #include <utility>
 
 #include "base/callback.h"
 #include "base/macros.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "extensions/browser/extension_registrar.h"
 #include "extensions/common/extension_id.h"

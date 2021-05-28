@@ -7,7 +7,6 @@
 
 #include <memory>
 #include <set>
-#include <string>
 #include <vector>
 
 #if defined(OS_WIN)

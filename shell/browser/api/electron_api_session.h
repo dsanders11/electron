@@ -15,12 +15,11 @@
 #include "gin/wrappable.h"
 #include "services/network/public/mojom/ssl_config.mojom.h"
 #include "shell/browser/event_emitter_mixin.h"
-#include "shell/browser/net/resolve_proxy_helper.h"
 #include "shell/common/gin_helper/cleaned_up_at_exit.h"
 #include "shell/common/gin_helper/error_thrower.h"
 #include "shell/common/gin_helper/function_template_extensions.h"
 #include "shell/common/gin_helper/pinnable.h"
-#include "shell/common/gin_helper/promise.h"
+#include "v8/include/v8.h"
 
 #if BUILDFLAG(ENABLE_BUILTIN_SPELLCHECKER)
 #include "chrome/browser/spellchecker/spellcheck_hunspell_dictionary.h"  // nogncheck

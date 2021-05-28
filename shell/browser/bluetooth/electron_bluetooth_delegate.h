@@ -9,10 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/observer_list.h"
-#include "base/scoped_observation.h"
 #include "content/public/browser/bluetooth_delegate.h"
-#include "content/public/browser/render_frame_host.h"
 #include "third_party/blink/public/mojom/bluetooth/web_bluetooth.mojom-forward.h"
 
 namespace blink {

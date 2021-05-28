@@ -5,7 +5,6 @@
 #include "shell/browser/api/electron_api_session.h"
 
 #include <algorithm>
-#include <map>
 #include <memory>
 #include <set>
 #include <string>
@@ -61,6 +60,7 @@
 #include "shell/browser/javascript_environment.h"
 #include "shell/browser/media/media_device_id_salt.h"
 #include "shell/browser/net/cert_verifier_client.h"
+#include "shell/browser/net/resolve_proxy_helper.h"
 #include "shell/browser/session_preferences.h"
 #include "shell/common/gin_converters/callback_converter.h"
 #include "shell/common/gin_converters/content_converter.h"
@@ -69,7 +69,7 @@
 #include "shell/common/gin_converters/net_converter.h"
 #include "shell/common/gin_converters/value_converter.h"
 #include "shell/common/gin_helper/dictionary.h"
-#include "shell/common/gin_helper/object_template_builder.h"
+#include "shell/common/gin_helper/promise.h"
 #include "shell/common/node_includes.h"
 #include "shell/common/options_switches.h"
 #include "shell/common/process_util.h"

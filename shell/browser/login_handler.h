@@ -5,10 +5,14 @@
 #ifndef SHELL_BROWSER_LOGIN_HANDLER_H_
 #define SHELL_BROWSER_LOGIN_HANDLER_H_
 
-#include "base/values.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/memory/weak_ptr.h"
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/login_delegate.h"
 #include "content/public/browser/web_contents_observer.h"
+#include "net/base/auth.h"
+#include "net/http/http_response_headers.h"
+#include "url/gurl.h"
 
 namespace content {
 class WebContents;

@@ -6,25 +6,19 @@
 #define SHELL_BROWSER_FILE_SELECT_HELPER_H_
 
 #include <memory>
-
-#include <string>
-#include <utility>
 #include <vector>
 
 #include "base/files/file_path.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/scoped_observation.h"
 #include "chrome/common/pref_names.h"
 #include "content/public/browser/file_select_listener.h"
 #include "content/public/browser/render_frame_host.h"
-#include "content/public/browser/render_process_host.h"
-#include "content/public/browser/render_view_host.h"
 #include "content/public/browser/render_widget_host.h"
 #include "content/public/browser/render_widget_host_observer.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
-#include "gin/dictionary.h"
 #include "net/base/directory_lister.h"
-#include "shell/browser/electron_browser_context.h"
 #include "shell/browser/ui/file_dialog.h"
 #include "shell/common/gin_helper/dictionary.h"
 #include "ui/shell_dialogs/selected_file_info.h"

@@ -13,7 +13,6 @@
 
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
-#include "base/observer_list_types.h"
 #include "chrome/browser/devtools/devtools_file_system_indexer.h"
 #include "content/common/cursors/webcursor.h"
 #include "content/common/frame.mojom.h"
@@ -27,7 +26,6 @@
 #include "electron/shell/common/api/api.mojom.h"
 #include "gin/handle.h"
 #include "gin/wrappable.h"
-#include "mojo/public/cpp/bindings/receiver_set.h"
 #include "printing/buildflags/buildflags.h"
 #include "services/service_manager/public/cpp/binder_registry.h"
 #include "shell/browser/api/frame_subscriber.h"

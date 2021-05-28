@@ -8,18 +8,16 @@
 #include <map>
 #include <memory>
 #include <string>
-#include <utility>
 #include <vector>
 
+#include "base/callback.h"
 #include "base/task/cancelable_task_tracker.h"
-#include "chrome/browser/icon_manager.h"
 #include "chrome/browser/process_singleton.h"
 #include "content/public/browser/browser_child_process_observer.h"
 #include "content/public/browser/gpu_data_manager_observer.h"
 #include "content/public/browser/render_process_host.h"
 #include "gin/handle.h"
 #include "net/base/completion_once_callback.h"
-#include "net/base/completion_repeating_callback.h"
 #include "net/ssl/client_cert_identity.h"
 #include "shell/browser/api/process_metric.h"
 #include "shell/browser/browser.h"
@@ -28,7 +26,7 @@
 #include "shell/browser/event_emitter_mixin.h"
 #include "shell/common/gin_helper/dictionary.h"
 #include "shell/common/gin_helper/error_thrower.h"
-#include "shell/common/gin_helper/promise.h"
+#include "v8/include/v8.h"
 
 #if defined(USE_NSS_CERTS)
 #include "chrome/browser/certificate_manager_model.h"

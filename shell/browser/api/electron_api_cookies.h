@@ -5,16 +5,13 @@
 #ifndef SHELL_BROWSER_API_ELECTRON_API_COOKIES_H_
 #define SHELL_BROWSER_API_ELECTRON_API_COOKIES_H_
 
-#include <memory>
 #include <string>
 
 #include "base/callback_list.h"
 #include "gin/handle.h"
-#include "net/cookies/canonical_cookie.h"
 #include "net/cookies/cookie_change_dispatcher.h"
 #include "shell/browser/event_emitter_mixin.h"
-#include "shell/common/gin_helper/promise.h"
-#include "shell/common/gin_helper/trackable_object.h"
+#include "v8/include/v8.h"
 
 namespace base {
 class DictionaryValue;
@@ -22,10 +19,6 @@ class DictionaryValue;
 
 namespace gin_helper {
 class Dictionary;
-}
-
-namespace net {
-class URLRequestContextGetter;
 }
 
 namespace electron {

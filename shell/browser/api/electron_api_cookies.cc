@@ -4,7 +4,6 @@
 
 #include "shell/browser/api/electron_api_cookies.h"
 
-#include <memory>
 #include <utility>
 
 #include "base/time/time.h"
@@ -25,7 +24,7 @@
 #include "shell/common/gin_converters/gurl_converter.h"
 #include "shell/common/gin_converters/value_converter.h"
 #include "shell/common/gin_helper/dictionary.h"
-#include "shell/common/gin_helper/object_template_builder.h"
+#include "shell/common/gin_helper/promise.h"
 
 using content::BrowserThread;
 

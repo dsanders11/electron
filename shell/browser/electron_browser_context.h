@@ -8,7 +8,6 @@
 #include <map>
 #include <memory>
 #include <string>
-#include <vector>
 
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/predictors/preconnect_manager.h"
@@ -16,7 +15,6 @@
 #include "content/public/browser/resource_context.h"
 #include "electron/buildflags/buildflags.h"
 #include "services/network/public/mojom/network_context.mojom.h"
-#include "services/network/public/mojom/url_loader_factory.mojom.h"
 #include "shell/browser/media/media_device_id_salt.h"
 
 class PrefRegistrySimple;

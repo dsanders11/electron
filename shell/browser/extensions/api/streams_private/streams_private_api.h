@@ -5,10 +5,8 @@
 #ifndef SHELL_BROWSER_EXTENSIONS_API_STREAMS_PRIVATE_STREAMS_PRIVATE_API_H_
 #define SHELL_BROWSER_EXTENSIONS_API_STREAMS_PRIVATE_STREAMS_PRIVATE_API_H_
 
-#include <memory>
 #include <string>
 
-#include "base/macros.h"
 #include "third_party/blink/public/mojom/loader/transferrable_url_loader.mojom.h"
 
 namespace extensions {

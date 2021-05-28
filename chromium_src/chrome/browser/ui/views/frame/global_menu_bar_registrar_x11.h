@@ -9,7 +9,6 @@
 
 #include <set>
 
-#include "base/memory/ref_counted.h"
 #include "base/memory/singleton.h"
 #include "ui/base/glib/glib_signal.h"
 #include "ui/gfx/x/xproto.h"

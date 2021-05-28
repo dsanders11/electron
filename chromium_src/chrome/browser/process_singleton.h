@@ -9,17 +9,12 @@
 #include <windows.h>
 #endif  // defined(OS_WIN)
 
-#include <set>
-#include <vector>
-
 #include "base/callback.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
-#include "base/logging.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/process/process.h"
 #include "base/sequence_checker.h"
-#include "ui/gfx/native_widget_types.h"
 
 #if defined(OS_POSIX) && !defined(OS_ANDROID)
 #include "base/files/scoped_temp_dir.h"

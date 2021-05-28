@@ -10,14 +10,12 @@
 #include <memory>
 #include <queue>
 #include <string>
-#include <tuple>
 #include <vector>
 
 #include "base/mac/scoped_nsobject.h"
 #include "shell/browser/native_window.h"
 #include "ui/display/display_observer.h"
 #include "ui/native_theme/native_theme_observer.h"
-#include "ui/views/controls/native/native_view_host.h"
 
 @class ElectronNSWindow;
 @class ElectronNSWindowDelegate;

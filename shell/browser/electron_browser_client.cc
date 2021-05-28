@@ -80,6 +80,7 @@
 #include "shell/browser/electron_speech_recognition_manager_delegate.h"
 #include "shell/browser/font_defaults.h"
 #include "shell/browser/javascript_environment.h"
+#include "shell/browser/login_handler.h"
 #include "shell/browser/media/media_capture_devices_dispatcher.h"
 #include "shell/browser/native_window.h"
 #include "shell/browser/net/network_context_service.h"

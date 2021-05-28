@@ -5,11 +5,9 @@
 #ifndef SHELL_BROWSER_API_ELECTRON_API_NOTIFICATION_H_
 #define SHELL_BROWSER_API_ELECTRON_API_NOTIFICATION_H_
 
-#include <memory>
 #include <string>
 #include <vector>
 
-#include "base/strings/utf_string_conversions.h"
 #include "gin/wrappable.h"
 #include "shell/browser/event_emitter_mixin.h"
 #include "shell/browser/notifications/notification.h"

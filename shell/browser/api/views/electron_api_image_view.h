@@ -5,7 +5,6 @@
 #ifndef SHELL_BROWSER_API_VIEWS_ELECTRON_API_IMAGE_VIEW_H_
 #define SHELL_BROWSER_API_VIEWS_ELECTRON_API_IMAGE_VIEW_H_
 
-#include "gin/handle.h"
 #include "shell/browser/api/electron_api_view.h"
 #include "ui/gfx/image/image.h"
 #include "ui/views/controls/image_view.h"

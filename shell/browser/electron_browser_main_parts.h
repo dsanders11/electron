@@ -5,15 +5,10 @@
 #ifndef SHELL_BROWSER_ELECTRON_BROWSER_MAIN_PARTS_H_
 #define SHELL_BROWSER_ELECTRON_BROWSER_MAIN_PARTS_H_
 
-#include <list>
 #include <memory>
-#include <string>
 
-#include "base/callback.h"
 #include "base/metrics/field_trial.h"
 #include "base/optional.h"
-#include "base/timer/timer.h"
-#include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_main_parts.h"
 #include "content/public/common/main_function_params.h"
 #include "electron/buildflags/buildflags.h"

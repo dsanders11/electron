@@ -12,7 +12,6 @@
 #include "base/memory/weak_ptr.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "electron/shell/common/api/api.mojom.h"
-#include "shell/browser/api/electron_api_web_contents.h"
 
 namespace content {
 class RenderFrameHost;

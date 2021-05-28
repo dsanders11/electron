@@ -5,11 +5,8 @@
 #ifndef SHELL_APP_ELECTRON_CONTENT_CLIENT_H_
 #define SHELL_APP_ELECTRON_CONTENT_CLIENT_H_
 
-#include <set>
-#include <string>
 #include <vector>
 
-#include "base/files/file_path.h"
 #include "content/public/common/content_client.h"
 
 namespace electron {

@@ -5,6 +5,7 @@
 #include "shell/common/application_info.h"
 
 #include "base/no_destructor.h"
+#include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "chrome/common/chrome_version.h"
 #include "content/public/common/user_agent.h"

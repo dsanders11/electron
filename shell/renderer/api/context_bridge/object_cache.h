@@ -5,14 +5,11 @@
 #ifndef SHELL_RENDERER_API_CONTEXT_BRIDGE_OBJECT_CACHE_H_
 #define SHELL_RENDERER_API_CONTEXT_BRIDGE_OBJECT_CACHE_H_
 
+#include <forward_list>
 #include <unordered_map>
 #include <utility>
 
-#include "base/containers/linked_list.h"
-#include "content/public/renderer/render_frame.h"
-#include "content/public/renderer/render_frame_observer.h"
-#include "shell/renderer/electron_render_frame_observer.h"
-#include "third_party/blink/public/web/web_local_frame.h"
+#include "v8/include/v8.h"
 
 namespace electron {
 

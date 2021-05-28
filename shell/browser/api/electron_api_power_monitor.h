@@ -9,7 +9,6 @@
 #include "gin/wrappable.h"
 #include "shell/browser/event_emitter_mixin.h"
 #include "shell/common/gin_helper/pinnable.h"
-#include "ui/base/idle/idle.h"
 
 #if defined(OS_LINUX)
 #include "shell/browser/lib/power_observer_linux.h"

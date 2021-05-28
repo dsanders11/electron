@@ -6,9 +6,7 @@
 #define SHELL_BROWSER_SERIAL_SERIAL_CHOOSER_CONTEXT_H_
 
 #include <map>
-#include <memory>
 #include <set>
-#include <string>
 #include <utility>
 #include <vector>
 
@@ -21,7 +19,6 @@
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/device/public/mojom/serial.mojom-forward.h"
 #include "third_party/blink/public/mojom/serial/serial.mojom.h"
-#include "url/gurl.h"
 #include "url/origin.h"
 
 namespace base {
