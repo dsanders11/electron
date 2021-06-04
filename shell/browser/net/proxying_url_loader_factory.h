@@ -142,7 +142,7 @@ class ProxyingURLLoaderFactory
 
     mojo::Receiver<network::mojom::URLLoaderClient> proxied_client_receiver_{
         this};
-    network::mojom::URLLoaderPtr target_loader_;
+    mojo::Remote<network::mojom::URLLoader> target_loader_;
 
     network::mojom::URLResponseHeadPtr current_response_;
     scoped_refptr<net::HttpResponseHeaders> override_headers_;
