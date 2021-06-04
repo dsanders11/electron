@@ -21,6 +21,7 @@
 #include "net/http/http_status_code.h"
 #include "net/http/http_util.h"
 #include "net/url_request/redirect_info.h"
+#include "net/url_request/redirect_util.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "services/network/public/cpp/features.h"
 #include "services/network/public/mojom/early_hints.mojom.h"
@@ -29,6 +30,28 @@
 #include "url/origin.h"
 
 namespace electron {
+namespace {
+
+// Creates simulated net::RedirectInfo when an extension redirects a request,
+// behaving like a redirect response was actually returned by the remote server.
+net::RedirectInfo CreateRedirectInfo(
+    const network::ResourceRequest& original_request,
+    const GURL& new_url,
+    int response_code,
+    const absl::optional<std::string>& referrer_policy_header) {
+  return net::RedirectInfo::ComputeRedirectInfo(
+      original_request.method, original_request.url,
+      original_request.site_for_cookies,
+      original_request.update_first_party_url_on_redirect
+          ? net::RedirectInfo::FirstPartyURLPolicy::UPDATE_URL_ON_REDIRECT
+          : net::RedirectInfo::FirstPartyURLPolicy::NEVER_CHANGE_URL,
+      original_request.referrer_policy, original_request.referrer.spec(),
+      response_code, new_url, referrer_policy_header,
+      false /* insecure_scheme_was_upgraded */, false /* copy_fragment */,
+      false /* is_signed_exchange_fallback_redirect */);
+}
+
+}  // namespace
 
 ProxyingURLLoaderFactory::InProgressRequest::FollowRedirectParams::
     FollowRedirectParams() = default;
@@ -404,12 +427,9 @@ void ProxyingURLLoaderFactory::InProgressRequest::
 
   constexpr int kInternalRedirectStatusCode = net::HTTP_TEMPORARY_REDIRECT;
 
-  net::RedirectInfo redirect_info;
-  redirect_info.status_code = kInternalRedirectStatusCode;
-  redirect_info.new_method = request_.method;
-  redirect_info.new_url = redirect_url_;
-  redirect_info.new_site_for_cookies =
-      net::SiteForCookies::FromUrl(redirect_url_);
+  net::RedirectInfo redirect_info =
+      CreateRedirectInfo(request_, redirect_url_, kInternalRedirectStatusCode,
+                         absl::nullopt /* referrer_policy_header */);
 
   auto head = network::mojom::URLResponseHead::New();
   std::string headers = base::StringPrintf(
@@ -655,11 +675,9 @@ void ProxyingURLLoaderFactory::InProgressRequest::ContinueToResponseStarted(
     // request to the Network Service. Our client shouldn't know the difference.
     GURL new_url(redirect_location);
 
-    net::RedirectInfo redirect_info;
-    redirect_info.status_code = override_headers_->response_code();
-    redirect_info.new_method = request_.method;
-    redirect_info.new_url = new_url;
-    redirect_info.new_site_for_cookies = net::SiteForCookies::FromUrl(new_url);
+    net::RedirectInfo redirect_info = CreateRedirectInfo(
+        request_, new_url, override_headers_->response_code(),
+        net::RedirectUtil::GetReferrerPolicyHeader(override_headers_.get()));
 
     // These will get re-bound if a new request is initiated by
     // |FollowRedirect()|.
@@ -701,6 +719,11 @@ void ProxyingURLLoaderFactory::InProgressRequest::ContinueToBeforeRedirect(
   request_.site_for_cookies = redirect_info.new_site_for_cookies;
   request_.referrer = GURL(redirect_info.new_referrer);
   request_.referrer_policy = redirect_info.new_referrer_policy;
+  if (request_.trusted_params) {
+    request_.trusted_params->isolation_info =
+        request_.trusted_params->isolation_info.CreateForRedirect(
+            url::Origin::Create(redirect_info.new_url));
+  }
 
   // The request method can be changed to "GET". In this case we need to
   // reset the request body manually.
