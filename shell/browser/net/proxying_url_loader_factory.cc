@@ -830,6 +830,7 @@ void ProxyingURLLoaderFactory::InProgressRequest::OnRequestError(
     target_client_->OnComplete(status);
   factory_->web_request_api()->OnErrorOccurred(&info_.value(), request_,
                                                status.error_code);
+  state_ = state;
 
   // Deletes |this|.
   factory_->RemoveRequest(network_service_request_id_, request_id_);
