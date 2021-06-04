@@ -54,10 +54,10 @@ class ProxyingURLLoaderFactory
     // For usual requests
     InProgressRequest(
         ProxyingURLLoaderFactory* factory,
-        int64_t web_request_id,
+        int64_t request_id,
+        int32_t network_service_request_id,
         int32_t view_routing_id,
         int32_t frame_routing_id,
-        int32_t network_service_request_id,
         uint32_t options,
         const network::ResourceRequest& request,
         const net::MutableNetworkTrafficAnnotationTag& traffic_annotation,
@@ -190,7 +190,7 @@ class ProxyingURLLoaderFactory
     // network::mojom::TrustedURLLoaderHeaderClient binding on the factory. This
     // is only set to true if there is a listener that needs to view or modify
     // headers set in the network process.
-    bool has_any_extra_headers_listeners_ = false;
+    const bool has_any_extra_headers_listeners_ = false;
     bool current_request_uses_header_client_ = false;
     OnBeforeSendHeadersCallback on_before_send_headers_callback_;
     OnHeadersReceivedCallback on_headers_received_callback_;
@@ -229,7 +229,7 @@ class ProxyingURLLoaderFactory
       uint64_t* request_id_generator,
       std::unique_ptr<extensions::ExtensionNavigationUIData> navigation_ui_data,
       absl::optional<int64_t> navigation_id,
-      network::mojom::URLLoaderFactoryRequest loader_request,
+      mojo::PendingReceiver<network::mojom::URLLoaderFactory> loader_receiver,
       mojo::PendingRemote<network::mojom::URLLoaderFactory>
           target_factory_remote,
       mojo::PendingReceiver<network::mojom::TrustedURLLoaderHeaderClient>
@@ -240,7 +240,7 @@ class ProxyingURLLoaderFactory
 
   // network::mojom::URLLoaderFactory:
   void CreateLoaderAndStart(
-      mojo::PendingReceiver<network::mojom::URLLoader> loader,
+      mojo::PendingReceiver<network::mojom::URLLoader> loader_receiver,
       int32_t request_id,
       uint32_t options,
       const network::ResourceRequest& request,
@@ -261,6 +261,11 @@ class ProxyingURLLoaderFactory
       override;
 
   WebRequestAPI* web_request_api() { return web_request_api_; }
+
+  content::ContentBrowserClient::URLLoaderFactoryType loader_factory_type()
+      const {
+    return loader_factory_type_;
+  }
 
   bool IsForServiceWorkerScript() const;
 
