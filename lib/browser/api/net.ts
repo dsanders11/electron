@@ -59,27 +59,18 @@ class IncomingMessage extends Readable {
 
   get headers () {
     const filteredHeaders: Record<string, string | string[]> = {};
-    const { rawHeaders } = this._responseHead;
-    rawHeaders.forEach(header => {
-      if (Object.prototype.hasOwnProperty.call(filteredHeaders, header.key) &&
-          discardableDuplicateHeaders.has(header.key)) {
+    const rawHeaders = this._responseHead.headers;
+    Object.keys(rawHeaders).forEach(header => {
+      if (header in filteredHeaders && discardableDuplicateHeaders.has(header)) {
         // do nothing with discardable duplicate headers
       } else {
-        if (header.key === 'set-cookie') {
+        if (header === 'set-cookie') {
           // keep set-cookie as an array per Node.js rules
           // see https://nodejs.org/api/http.html#http_message_headers
-          if (Object.prototype.hasOwnProperty.call(filteredHeaders, header.key)) {
-            (filteredHeaders[header.key] as string[]).push(header.value);
-          } else {
-            filteredHeaders[header.key] = [header.value];
-          }
+          filteredHeaders[header] = rawHeaders[header];
         } else {
           // for non-cookie headers, the values are joined together with ', '
-          if (Object.prototype.hasOwnProperty.call(filteredHeaders, header.key)) {
-            filteredHeaders[header.key] += `, ${header.value}`;
-          } else {
-            filteredHeaders[header.key] = header.value;
-          }
+          filteredHeaders[header] = rawHeaders[header].join(', ');
         }
       }
     });

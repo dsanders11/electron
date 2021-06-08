@@ -152,7 +152,7 @@ declare namespace NodeJS {
     statusCode: number;
     statusMessage: string;
     httpVersion: { major: number, minor: number };
-    rawHeaders: { key: string, value: string }[];
+    headers: Record<string, string[]>;
   };
 
   type RedirectInfo = {
