@@ -33,6 +33,7 @@
 #include "content/public/browser/cors_origin_pattern_setter.h"
 #include "content/public/browser/shared_cors_origin_access_list.h"
 #include "content/public/browser/storage_partition.h"
+#include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "net/base/escape.h"
 #include "services/network/public/cpp/features.h"
 #include "services/network/public/cpp/wrapper_shared_url_loader_factory.h"
@@ -52,6 +53,7 @@
 #include "shell/common/application_info.h"
 #include "shell/common/electron_paths.h"
 #include "shell/common/options_switches.h"
+#include "url/gurl.h"
 
 #if BUILDFLAG(ENABLE_ELECTRON_EXTENSIONS)
 #include "extensions/browser/browser_context_keyed_service_factories.h"
@@ -92,6 +94,107 @@ std::string MakePartitionName(const std::string& input) {
 }
 
 }  // namespace
+
+TrustedHeaderObserver::TrustedHeaderObserver(
+    mojo::PendingRemote<network::mojom::TrustedHeaderClient>
+        target_header_client,
+    mojo::PendingRemote<network::mojom::TrustedHeaderClient> header_observer) {
+  target_header_client_.Bind(std::move(target_header_client));
+  if (header_observer) {
+    header_observer_.Bind(std::move(header_observer));
+  }
+}
+
+TrustedHeaderObserver::~TrustedHeaderObserver() = default;
+
+void TrustedHeaderObserver::OnBeforeSendHeaders(
+    const net::HttpRequestHeaders& headers,
+    OnBeforeSendHeadersCallback callback) {
+  if (!target_header_client_.is_connected()) {
+    std::move(callback).Run(net::OK, absl::nullopt);
+  } else {
+    target_header_client_->OnBeforeSendHeaders(headers, std::move(callback));
+  }
+}
+
+void TrustedHeaderObserver::OnHeadersReceived(
+    const std::string& headers,
+    const net::IPEndPoint& endpoint,
+    OnHeadersReceivedCallback callback) {
+  // Callback must always be invoked, so if there's not a connected
+  // target header client to forward it to, invoke it here instead
+  if (!target_header_client_.is_connected()) {
+    std::move(callback).Run(net::OK, absl::nullopt, absl::nullopt);
+  } else {
+    target_header_client_->OnHeadersReceived(headers, endpoint,
+                                             std::move(callback));
+  }
+
+  if (header_observer_) {
+    // |header_observer_| is merely observing the headers, so give it a
+    // no-op callback to satisfy the Mojo interface (it must be invoked)
+    header_observer_->OnHeadersReceived(
+        headers, endpoint,
+        base::BindOnce([](int32_t, const absl::optional<std::string>&,
+                          const absl::optional<GURL>&) {}));
+  }
+}
+
+TrustedURLLoaderHeaderObserver::TrustedURLLoaderHeaderObserver(
+    mojo::PendingRemote<network::mojom::TrustedURLLoaderHeaderClient>
+        target_header_client,
+    mojo::PendingReceiver<network::mojom::TrustedURLLoaderHeaderClient>
+        header_client_receiver) {
+  target_header_client_.Bind(std::move(target_header_client));
+  target_header_client_.set_disconnect_handler(
+      base::BindOnce(&TrustedURLLoaderHeaderObserver::OnMojoDisconnect,
+                     weak_factory_.GetWeakPtr()));
+  receiver_.Bind(std::move(header_client_receiver));
+  receiver_.set_disconnect_handler(
+      base::BindOnce(&TrustedURLLoaderHeaderObserver::OnMojoDisconnect,
+                     weak_factory_.GetWeakPtr()));
+}
+
+TrustedURLLoaderHeaderObserver::~TrustedURLLoaderHeaderObserver() = default;
+
+void TrustedURLLoaderHeaderObserver::OnMojoDisconnect() {
+  DCHECK(requests_to_observe_.empty());
+}
+
+void TrustedURLLoaderHeaderObserver::OnLoaderCreated(
+    int32_t request_id,
+    mojo::PendingReceiver<network::mojom::TrustedHeaderClient> receiver) {
+  auto request_it = requests_to_observe_.find(request_id);
+
+  mojo::PendingRemote<network::mojom::TrustedHeaderClient> target_header_client;
+  target_header_client_->OnLoaderCreated(
+      request_id, target_header_client.InitWithNewPipeAndPassReceiver());
+
+  mojo::PendingRemote<network::mojom::TrustedHeaderClient> header_observer;
+
+  if (request_it != requests_to_observe_.end()) {
+    header_observer = std::move(request_it->second);
+    requests_to_observe_.erase(request_id);
+  }
+
+  mojo::MakeSelfOwnedReceiver(
+      std::make_unique<TrustedHeaderObserver>(std::move(target_header_client),
+                                              std::move(header_observer)),
+      std::move(receiver));
+}
+
+void TrustedURLLoaderHeaderObserver::OnLoaderForCorsPreflightCreated(
+    const network::ResourceRequest& request,
+    mojo::PendingReceiver<network::mojom::TrustedHeaderClient> receiver) {
+  target_header_client_->OnLoaderForCorsPreflightCreated(request,
+                                                         std::move(receiver));
+}
+
+void TrustedURLLoaderHeaderObserver::ObserveRequest(
+    int32_t request_id,
+    mojo::PendingRemote<network::mojom::TrustedHeaderClient> loader_remote) {
+  requests_to_observe_.emplace(request_id, std::move(loader_remote));
+}
 
 // static
 ElectronBrowserContext::BrowserContextMap&
@@ -329,13 +432,19 @@ ElectronBrowserContext::GetURLLoaderFactory() {
 
   // Consult the embedder.
   mojo::PendingRemote<network::mojom::TrustedURLLoaderHeaderClient>
-      header_client;
+      target_header_client;
   static_cast<content::ContentBrowserClient*>(ElectronBrowserClient::Get())
       ->WillCreateURLLoaderFactory(
           this, nullptr, -1,
           content::ContentBrowserClient::URLLoaderFactoryType::kNavigation,
           url::Origin(), absl::nullopt, ukm::kInvalidSourceIdObj,
-          &factory_receiver, &header_client, nullptr, nullptr, nullptr);
+          &factory_receiver, &target_header_client, nullptr, nullptr, nullptr);
+
+  mojo::PendingRemote<network::mojom::TrustedURLLoaderHeaderClient>
+      header_client;
+  trusted_header_observer_ = std::make_unique<TrustedURLLoaderHeaderObserver>(
+      std::move(target_header_client),
+      header_client.InitWithNewPipeAndPassReceiver());
 
   network::mojom::URLLoaderFactoryParamsPtr params =
       network::mojom::URLLoaderFactoryParams::New();
@@ -356,6 +465,11 @@ ElectronBrowserContext::GetURLLoaderFactory() {
       base::MakeRefCounted<network::WrapperSharedURLLoaderFactory>(
           std::move(network_factory_remote));
   return url_loader_factory_;
+}
+
+TrustedURLLoaderHeaderObserver*
+ElectronBrowserContext::GetTrustedURLLoaderHeaderObserver() {
+  return trusted_header_observer_.get();
 }
 
 content::PushMessagingService*
