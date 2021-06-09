@@ -42,7 +42,8 @@ class SimpleURLLoaderWrapper
     : public gin::Wrappable<SimpleURLLoaderWrapper>,
       public gin_helper::EventEmitterMixin<SimpleURLLoaderWrapper>,
       public network::SimpleURLLoaderStreamConsumer,
-      public network::mojom::URLLoaderNetworkServiceObserver {
+      public network::mojom::URLLoaderNetworkServiceObserver,
+      public network::mojom::TrustedHeaderClient {
  public:
   ~SimpleURLLoaderWrapper() override;
   static gin::Handle<SimpleURLLoaderWrapper> Create(gin::Arguments* args);
@@ -56,9 +57,13 @@ class SimpleURLLoaderWrapper
   const char* GetTypeName() override;
 
  private:
-  SimpleURLLoaderWrapper(std::unique_ptr<network::ResourceRequest> request,
-                         network::mojom::URLLoaderFactory* url_loader_factory,
-                         int options);
+  SimpleURLLoaderWrapper(
+      std::unique_ptr<network::ResourceRequest> request,
+      int32_t request_id,
+      network::mojom::URLLoaderFactory* url_loader_factory,
+      int options,
+      mojo::PendingReceiver<network::mojom::TrustedHeaderClient>
+          header_client_receiver);
 
   // SimpleURLLoaderStreamConsumer:
   void OnDataReceived(base::StringPiece string_piece,
@@ -108,6 +113,13 @@ class SimpleURLLoaderWrapper
   void OnUploadProgress(uint64_t position, uint64_t total);
   void OnDownloadProgress(uint64_t current);
 
+  // network::mojom::TrustedHeaderClient:
+  void OnBeforeSendHeaders(const net::HttpRequestHeaders& headers,
+                           OnBeforeSendHeadersCallback callback) override;
+  void OnHeadersReceived(const std::string& headers,
+                         const net::IPEndPoint& endpoint,
+                         OnHeadersReceivedCallback callback) override;
+
   void Start();
   void Pin();
   void PinBodyGetter(v8::Local<v8::Value>);
@@ -115,9 +127,12 @@ class SimpleURLLoaderWrapper
   std::unique_ptr<network::SimpleURLLoader> loader_;
   v8::Global<v8::Value> pinned_wrapper_;
   v8::Global<v8::Value> pinned_chunk_pipe_getter_;
+  scoped_refptr<net::HttpResponseHeaders> response_headers_;
 
   mojo::ReceiverSet<network::mojom::URLLoaderNetworkServiceObserver>
       url_loader_network_observer_receivers_;
+  mojo::Receiver<network::mojom::TrustedHeaderClient> header_client_receiver_{
+      this};
   base::WeakPtrFactory<SimpleURLLoaderWrapper> weak_factory_{this};
 };
 

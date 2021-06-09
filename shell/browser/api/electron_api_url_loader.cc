@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "base/no_destructor.h"
+#include "content/public/browser/global_request_id.h"
 #include "gin/handle.h"
 #include "gin/object_template_builder.h"
 #include "gin/wrappable.h"
@@ -254,8 +255,11 @@ gin::WrapperInfo SimpleURLLoaderWrapper::kWrapperInfo = {
 
 SimpleURLLoaderWrapper::SimpleURLLoaderWrapper(
     std::unique_ptr<network::ResourceRequest> request,
+    int32_t request_id,
     network::mojom::URLLoaderFactory* url_loader_factory,
-    int options) {
+    int options,
+    mojo::PendingReceiver<network::mojom::TrustedHeaderClient>
+        header_client_receiver) {
   if (!request->trusted_params)
     request->trusted_params = network::ResourceRequest::TrustedParams();
   mojo::PendingRemote<network::mojom::URLLoaderNetworkServiceObserver>
@@ -263,6 +267,7 @@ SimpleURLLoaderWrapper::SimpleURLLoaderWrapper(
   url_loader_network_observer_receivers_.Add(
       this,
       url_loader_network_observer_remote.InitWithNewPipeAndPassReceiver());
+  header_client_receiver_.Bind(std::move(header_client_receiver));
   request->trusted_params->url_loader_network_observer =
       std::move(url_loader_network_observer_remote);
   // SimpleURLLoader wants to control the request body itself. We have other
@@ -275,6 +280,7 @@ SimpleURLLoaderWrapper::SimpleURLLoaderWrapper(
     request_ref->request_body = std::move(request_body);
   }
 
+  loader_->SetRequestID(request_id);
   loader_->SetAllowHttpErrorResults(true);
   loader_->SetURLLoaderFactoryOptions(options);
   loader_->SetOnResponseStartedCallback(base::BindOnce(
@@ -477,6 +483,11 @@ gin::Handle<SimpleURLLoaderWrapper> SimpleURLLoaderWrapper::Create(
     options |= network::mojom::kURLLoadOptionBlockAllCookies;
   }
 
+  // TBD - Are there other trusted headers which might not be covered by this?
+  if (request->credentials_mode == network::mojom::CredentialsMode::kInclude) {
+    options |= network::mojom::kURLLoadOptionUseHeaderClient;
+  }
+
   v8::Local<v8::Value> body;
   v8::Local<v8::Value> chunk_pipe_getter;
   if (opts.Get("body", &body)) {
@@ -514,10 +525,19 @@ gin::Handle<SimpleURLLoaderWrapper> SimpleURLLoaderWrapper::Create(
 
   auto url_loader_factory = session->browser_context()->GetURLLoaderFactory();
 
+  int32_t request_id =
+      content::GlobalRequestID::MakeBrowserInitiated().request_id;
+  mojo::PendingRemote<network::mojom::TrustedHeaderClient> header_client_remote;
   auto ret = gin::CreateHandle(
       args->isolate(),
-      new SimpleURLLoaderWrapper(std::move(request), url_loader_factory.get(),
-                                 options));
+      new SimpleURLLoaderWrapper(
+          std::move(request), request_id, url_loader_factory.get(), options,
+          header_client_remote.InitWithNewPipeAndPassReceiver()));
+  if (options & network::mojom::kURLLoadOptionUseHeaderClient) {
+    session->browser_context()
+        ->GetTrustedURLLoaderHeaderObserver()
+        ->ObserveRequest(request_id, std::move(header_client_remote));
+  }
   ret->Pin();
   if (!chunk_pipe_getter.IsEmpty()) {
     ret->PinBodyGetter(chunk_pipe_getter);
@@ -558,7 +578,8 @@ void SimpleURLLoaderWrapper::OnResponseStarted(
   gin::Dictionary dict = gin::Dictionary::CreateEmpty(isolate);
   dict.Set("statusCode", response_head.headers->response_code());
   dict.Set("statusMessage", response_head.headers->GetStatusText());
-  dict.Set("headers", response_head.headers.get());
+  dict.Set("headers", response_headers_ ? response_headers_.get()
+                                        : response_head.headers.get());
   dict.Set("httpVersion", response_head.headers->GetHttpVersion());
   Emit("response-started", final_url, dict);
 }
@@ -567,7 +588,9 @@ void SimpleURLLoaderWrapper::OnRedirect(
     const net::RedirectInfo& redirect_info,
     const network::mojom::URLResponseHead& response_head,
     std::vector<std::string>* removed_headers) {
-  Emit("redirect", redirect_info, response_head.headers.get());
+  Emit("redirect", redirect_info,
+       response_headers_ ? response_headers_.get()
+                         : response_head.headers.get());
 }
 
 void SimpleURLLoaderWrapper::OnUploadProgress(uint64_t position,
@@ -577,6 +600,21 @@ void SimpleURLLoaderWrapper::OnUploadProgress(uint64_t position,
 
 void SimpleURLLoaderWrapper::OnDownloadProgress(uint64_t current) {
   Emit("download-progress", current);
+}
+
+void SimpleURLLoaderWrapper::OnBeforeSendHeaders(
+    const net::HttpRequestHeaders& headers,
+    OnBeforeSendHeadersCallback callback) {
+  NOTREACHED();
+}
+
+void SimpleURLLoaderWrapper::OnHeadersReceived(
+    const std::string& headers,
+    const net::IPEndPoint& endpoint,
+    OnHeadersReceivedCallback callback) {
+  // Save the response headers to include in events emitted later on
+  response_headers_ = base::MakeRefCounted<net::HttpResponseHeaders>(headers);
+  std::move(callback).Run(net::OK, absl::nullopt, absl::nullopt);
 }
 
 // static

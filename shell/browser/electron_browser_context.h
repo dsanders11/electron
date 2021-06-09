@@ -8,6 +8,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <unordered_map>
 
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/predictors/preconnect_manager.h"
@@ -46,6 +47,64 @@ class ResolveProxyHelper;
 class SpecialStoragePolicy;
 class WebViewManager;
 class ProtocolRegistry;
+
+class TrustedHeaderObserver : public network::mojom::TrustedHeaderClient {
+ public:
+  TrustedHeaderObserver(
+      mojo::PendingRemote<network::mojom::TrustedHeaderClient>
+          target_header_client,
+      mojo::PendingRemote<network::mojom::TrustedHeaderClient> header_observer);
+  ~TrustedHeaderObserver() override;
+
+  // network::mojom::TrustedHeaderClient:
+  void OnBeforeSendHeaders(const net::HttpRequestHeaders& headers,
+                           OnBeforeSendHeadersCallback callback) override;
+  void OnHeadersReceived(const std::string& headers,
+                         const net::IPEndPoint& endpoint,
+                         OnHeadersReceivedCallback callback) override;
+
+ private:
+  mojo::Remote<network::mojom::TrustedHeaderClient> target_header_client_;
+  mojo::Remote<network::mojom::TrustedHeaderClient> header_observer_;
+};
+
+class TrustedURLLoaderHeaderObserver
+    : public network::mojom::TrustedURLLoaderHeaderClient {
+ public:
+  TrustedURLLoaderHeaderObserver(
+      mojo::PendingRemote<network::mojom::TrustedURLLoaderHeaderClient>
+          target_header_client,
+      mojo::PendingReceiver<network::mojom::TrustedURLLoaderHeaderClient>
+          header_client_receiver);
+  ~TrustedURLLoaderHeaderObserver() override;
+
+  void OnMojoDisconnect();
+
+  // network::mojom::TrustedURLLoaderHeaderClient:
+  void OnLoaderCreated(
+      int32_t request_id,
+      mojo::PendingReceiver<network::mojom::TrustedHeaderClient> receiver)
+      override;
+  void OnLoaderForCorsPreflightCreated(
+      const network::ResourceRequest& request,
+      mojo::PendingReceiver<network::mojom::TrustedHeaderClient> receiver)
+      override;
+
+  void ObserveRequest(
+      int32_t request_id,
+      mojo::PendingRemote<network::mojom::TrustedHeaderClient> loader_remote);
+
+ private:
+  mojo::Remote<network::mojom::TrustedURLLoaderHeaderClient>
+      target_header_client_;
+  mojo::Receiver<network::mojom::TrustedURLLoaderHeaderClient> receiver_{this};
+
+  std::unordered_map<int32_t,
+                     mojo::PendingRemote<network::mojom::TrustedHeaderClient>>
+      requests_to_observe_;
+
+  base::WeakPtrFactory<TrustedURLLoaderHeaderObserver> weak_factory_{this};
+};
 
 class ElectronBrowserContext : public content::BrowserContext {
  public:
@@ -87,6 +146,7 @@ class ElectronBrowserContext : public content::BrowserContext {
   ResolveProxyHelper* GetResolveProxyHelper();
   predictors::PreconnectManager* GetPreconnectManager();
   scoped_refptr<network::SharedURLLoaderFactory> GetURLLoaderFactory();
+  TrustedURLLoaderHeaderObserver* GetTrustedURLLoaderHeaderObserver();
 
   // content::BrowserContext:
   base::FilePath GetPath() override;
@@ -178,6 +238,8 @@ class ElectronBrowserContext : public content::BrowserContext {
 
   // Shared URLLoaderFactory.
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
+
+  std::unique_ptr<TrustedURLLoaderHeaderObserver> trusted_header_observer_;
 
   network::mojom::SSLConfigPtr ssl_config_;
   mojo::Remote<network::mojom::SSLConfigClient> ssl_config_client_;
