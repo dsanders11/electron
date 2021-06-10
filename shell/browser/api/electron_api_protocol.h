@@ -65,7 +65,7 @@ class Protocol : public gin::Wrappable<Protocol> {
 
   ProtocolError InterceptProtocol(ProtocolType type,
                                   const std::string& scheme,
-                                  const ProtocolHandler& handler);
+                                  const InterceptProtocolHandler& handler);
   bool UninterceptProtocol(const std::string& scheme, gin::Arguments* args);
   bool IsProtocolIntercepted(const std::string& scheme);
 
@@ -84,7 +84,7 @@ class Protocol : public gin::Wrappable<Protocol> {
   }
   template <ProtocolType type>
   bool InterceptProtocolFor(const std::string& scheme,
-                            const ProtocolHandler& handler,
+                            const InterceptProtocolHandler& handler,
                             gin::Arguments* args) {
     auto result = InterceptProtocol(type, scheme, handler);
     HandleOptionalCallback(args, result);

@@ -35,11 +35,9 @@
 
 namespace electron {
 
-// This class is responsible for following tasks when NetworkService is enabled:
-// 1. handling intercepted protocols;
-// 2. implementing webRequest module;
+// This class is responsible for implementing the webRequest module.
 //
-// For the task #2, the code is referenced from the
+// The code is referenced from the
 // extensions::WebRequestProxyingURLLoaderFactory class.
 class ProxyingURLLoaderFactory
     : public network::mojom::URLLoaderFactory,
@@ -191,7 +189,6 @@ class ProxyingURLLoaderFactory
 
   ProxyingURLLoaderFactory(
       WebRequestAPI* web_request_api,
-      const HandlersMap& intercepted_handlers,
       int render_process_id,
       int frame_routing_id,
       int view_routing_id,
@@ -243,19 +240,8 @@ class ProxyingURLLoaderFactory
   void RemoveRequest(int32_t network_service_request_id, uint64_t request_id);
   void MaybeDeleteThis();
 
-  bool ShouldIgnoreConnectionsLimit(const network::ResourceRequest& request);
-
   // Passed from api::WebRequest.
   WebRequestAPI* web_request_api_;
-
-  // This is passed from api::Protocol.
-  //
-  // The Protocol instance lives through the lifetime of BrowserContext,
-  // which is guaranteed to cover the lifetime of URLLoaderFactory, so the
-  // reference is guaranteed to be valid.
-  //
-  // In this way we can avoid using code from api namespace in this file.
-  const HandlersMap& intercepted_handlers_;
 
   const int render_process_id_;
   const int frame_routing_id_;
@@ -277,8 +263,6 @@ class ProxyingURLLoaderFactory
   // A mapping from the network stack's notion of request ID to our own
   // internally generated request ID for the same request.
   std::map<int32_t, uint64_t> network_request_id_to_web_request_id_;
-
-  std::vector<std::string> ignore_connections_limit_domains_;
 };
 
 }  // namespace electron

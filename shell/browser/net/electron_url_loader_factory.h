@@ -36,13 +36,20 @@ enum class ProtocolType {
 };
 
 using StartLoadingCallback = base::OnceCallback<void(gin::Arguments*)>;
+using ContinueRequestCallback = base::OnceCallback<void(gin::Arguments*)>;
 using ProtocolHandler =
     base::RepeatingCallback<void(const network::ResourceRequest&,
                                  StartLoadingCallback)>;
+using InterceptProtocolHandler =
+    base::RepeatingCallback<void(const network::ResourceRequest&,
+                                 StartLoadingCallback,
+                                 ContinueRequestCallback)>;
 
 // scheme => (type, handler).
 using HandlersMap =
     std::map<std::string, std::pair<ProtocolType, ProtocolHandler>>;
+using InterceptHandlersMap =
+    std::map<std::string, std::pair<ProtocolType, InterceptProtocolHandler>>;
 
 // Implementation of URLLoaderFactory.
 class ElectronURLLoaderFactory : public network::SelfDeletingURLLoaderFactory {

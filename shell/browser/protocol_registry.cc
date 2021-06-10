@@ -58,9 +58,10 @@ bool ProtocolRegistry::IsProtocolRegistered(const std::string& scheme) {
   return base::Contains(handlers_, scheme);
 }
 
-bool ProtocolRegistry::InterceptProtocol(ProtocolType type,
-                                         const std::string& scheme,
-                                         const ProtocolHandler& handler) {
+bool ProtocolRegistry::InterceptProtocol(
+    ProtocolType type,
+    const std::string& scheme,
+    const InterceptProtocolHandler& handler) {
   return intercept_handlers_.try_emplace(scheme, type, handler).second;
 }
 

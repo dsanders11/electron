@@ -508,6 +508,17 @@ describe('protocol module', () => {
   });
 
   describe('protocol.intercept(Any)Protocol', () => {
+    const createServer = async () => {
+      const server = http.createServer((req, res) => {
+        expect(req.headers.accept).to.not.equal('');
+        res.end(text);
+        server.close();
+      });
+      await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+
+      return (server.address() as AddressInfo).port;
+    };
+
     it('returns false when scheme is already intercepted', () => {
       expect(protocol.interceptStringProtocol('http', (request, callback) => callback(''))).to.equal(true);
       expect(protocol.interceptBufferProtocol('http', (request, callback) => callback(Buffer.from('')))).to.equal(false);
@@ -529,6 +540,41 @@ describe('protocol module', () => {
     it('sends error when callback is called with nothing', async () => {
       interceptStringProtocol('http', (request, callback: any) => callback());
       await expect(ajax('http://fake-host')).to.be.eventually.rejected();
+    });
+
+    it('can continue request unhandled', async () => {
+      const port = await createServer();
+      interceptStringProtocol('http', (request, callback, next) => next());
+      const r = await ajax(`http://127.0.0.1:${port}`);
+      expect(r.data).to.equal(text);
+    });
+
+    it('can asynchronously continue request unhandled', async () => {
+      const port = await createServer();
+      interceptStringProtocol('http', (request, callback, next) => {
+        setTimeout(next, 500);
+      });
+      const r = await ajax(`http://127.0.0.1:${port}`);
+      expect(r.data).to.equal(text);
+    });
+
+    it('does not crash when next and callback are both called, in either order', async () => {
+      interceptStringProtocol('http', (request, callback, next) => {
+        callback('intercepted');
+        expect(() => next()).to.throw(Error);
+      });
+      let r = await ajax('http://fake-host');
+      expect(r.data).to.be.equal('intercepted');
+      uninterceptProtocol('http');
+
+      const port = await createServer();
+      interceptStringProtocol('http', (request, callback, next) => {
+        next();
+        expect(() => callback('foobar')).to.throw(Error);
+      });
+      r = await ajax(`http://127.0.0.1:${port}`);
+      expect(r.data).to.not.be.equal('intercepted');
+      expect(r.data).to.equal(text);
     });
   });
 
