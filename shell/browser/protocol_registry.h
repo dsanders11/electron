@@ -29,7 +29,9 @@ class ProtocolRegistry {
       content::ContentBrowserClient::NonNetworkURLLoaderFactoryMap* factories,
       bool allow_file_access);
 
-  const HandlersMap& intercept_handlers() const { return intercept_handlers_; }
+  const InterceptHandlersMap& intercept_handlers() const {
+    return intercept_handlers_;
+  }
   const HandlersMap& handlers() const { return handlers_; }
 
   bool RegisterProtocol(ProtocolType type,
@@ -40,7 +42,7 @@ class ProtocolRegistry {
 
   bool InterceptProtocol(ProtocolType type,
                          const std::string& scheme,
-                         const ProtocolHandler& handler);
+                         const InterceptProtocolHandler& handler);
   bool UninterceptProtocol(const std::string& scheme);
   bool IsProtocolIntercepted(const std::string& scheme);
 
@@ -50,7 +52,7 @@ class ProtocolRegistry {
   ProtocolRegistry();
 
   HandlersMap handlers_;
-  HandlersMap intercept_handlers_;
+  InterceptHandlersMap intercept_handlers_;
 };
 
 }  // namespace electron

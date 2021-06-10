@@ -201,12 +201,10 @@ void ElectronURLLoaderFactory::CreateLoaderAndStart(
     mojo::PendingRemote<network::mojom::URLLoaderClient> client,
     const net::MutableNetworkTrafficAnnotationTag& traffic_annotation) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  mojo::PendingRemote<network::mojom::URLLoaderFactory> proxy_factory;
-  handler_.Run(
-      request,
-      base::BindOnce(&ElectronURLLoaderFactory::StartLoading, std::move(loader),
-                     request_id, options, request, std::move(client),
-                     traffic_annotation, std::move(proxy_factory), type_));
+  handler_.Run(request,
+               base::BindOnce(&ElectronURLLoaderFactory::StartLoading,
+                              std::move(loader), request_id, options, request,
+                              std::move(client), traffic_annotation, type_));
 }
 
 // static
@@ -229,7 +227,6 @@ void ElectronURLLoaderFactory::StartLoading(
     const network::ResourceRequest& request,
     mojo::PendingRemote<network::mojom::URLLoaderClient> client,
     const net::MutableNetworkTrafficAnnotationTag& traffic_annotation,
-    mojo::PendingRemote<network::mojom::URLLoaderFactory> proxy_factory,
     ProtocolType type,
     gin::Arguments* args) {
   // Send network error when there is no argument passed.
@@ -295,31 +292,6 @@ void ElectronURLLoaderFactory::StartLoading(
 
     // Unbound client, so it an be passed to sub-methods
     client = client_remote.Unbind();
-    // When the redirection comes from an intercepted scheme (which has
-    // |proxy_factory| passed), we ask the proxy factory to create a loader
-    // for new URL, otherwise we call |StartLoadingHttp|, which creates
-    // loader with default factory.
-    //
-    // Note that when handling requests for intercepted scheme, creating loader
-    // with default factory (i.e. calling StartLoadingHttp) would bypass the
-    // ProxyingURLLoaderFactory, we have to explicitly use the proxy factory to
-    // create loader so it is possible to have handlers of intercepted scheme
-    // getting called recursively, which is a behavior expected in protocol
-    // module.
-    //
-    // I'm not sure whether this is an intended behavior in Chromium.
-    if (proxy_factory.is_valid()) {
-      mojo::Remote<network::mojom::URLLoaderFactory> proxy_factory_remote(
-          std::move(proxy_factory));
-
-      proxy_factory_remote->CreateLoaderAndStart(
-          std::move(loader), request_id, options, new_request,
-          std::move(client), traffic_annotation);
-    } else {
-      StartLoadingHttp(std::move(loader), new_request, std::move(client),
-                       traffic_annotation,
-                       gin::Dictionary::CreateEmpty(args->isolate()));
-    }
     return;
   }
 
@@ -358,8 +330,7 @@ void ElectronURLLoaderFactory::StartLoading(
         return;
       }
       StartLoading(std::move(loader), request_id, options, request,
-                   std::move(client), traffic_annotation,
-                   std::move(proxy_factory), type, args);
+                   std::move(client), traffic_annotation, type, args);
       break;
   }
 }

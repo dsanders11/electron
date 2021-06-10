@@ -82,6 +82,7 @@
 #include "shell/browser/javascript_environment.h"
 #include "shell/browser/media/media_capture_devices_dispatcher.h"
 #include "shell/browser/native_window.h"
+#include "shell/browser/net/intercepting_url_loader_factory.h"
 #include "shell/browser/net/network_context_service.h"
 #include "shell/browser/net/network_context_service_factory.h"
 #include "shell/browser/net/proxying_url_loader_factory.h"
@@ -1301,6 +1302,19 @@ bool ElectronBrowserClient::WillCreateURLLoaderFactory(
   auto web_request = api::WebRequest::FromOrCreate(isolate, browser_context);
   DCHECK(web_request.get());
 
+  auto* protocol_registry =
+      ProtocolRegistry::FromBrowserContext(browser_context);
+
+  // Intercepting factory goes just before the target factory in the chain,
+  // and after any proxying factory, so that webRequest can work with it
+  auto proxied_receiver = std::move(*factory_receiver);
+
+  // |factory_receiver| is changed so that the target factory will bind that
+  // receiver, and the intercepting factory will use it as the remote to send
+  // requests to
+  mojo::PendingRemote<network::mojom::URLLoaderFactory> target_factory_remote;
+  *factory_receiver = target_factory_remote.InitWithNewPipeAndPassReceiver();
+
 #if BUILDFLAG(ENABLE_ELECTRON_EXTENSIONS)
   if (!web_request->HasListener()) {
     auto* web_request_api = extensions::BrowserContextKeyedAPIFactory<
@@ -1310,18 +1324,21 @@ bool ElectronBrowserClient::WillCreateURLLoaderFactory(
     bool use_proxy_for_web_request =
         web_request_api->MaybeProxyURLLoaderFactory(
             browser_context, frame_host, render_process_id, type, navigation_id,
-            ukm_source_id, factory_receiver, header_client);
+            ukm_source_id, &proxied_receiver, header_client);
 
     if (bypass_redirect_checks)
       *bypass_redirect_checks = use_proxy_for_web_request;
-    if (use_proxy_for_web_request)
+    if (use_proxy_for_web_request) {
+      // |proxied_receiver| is now the receiver for requests from the proxying
+      // factory
+      new InterceptingURLLoaderFactory(protocol_registry->intercept_handlers(),
+                                       std::move(proxied_receiver),
+                                       std::move(target_factory_remote));
+
       return true;
+    }
   }
 #endif
-
-  auto proxied_receiver = std::move(*factory_receiver);
-  mojo::PendingRemote<network::mojom::URLLoaderFactory> target_factory_remote;
-  *factory_receiver = target_factory_remote.InitWithNewPipeAndPassReceiver();
 
   // Required by WebRequestInfoInitParams.
   //
@@ -1339,16 +1356,19 @@ bool ElectronBrowserClient::WillCreateURLLoaderFactory(
   if (header_client)
     header_client_receiver = header_client->InitWithNewPipeAndPassReceiver();
 
-  auto* protocol_registry =
-      ProtocolRegistry::FromBrowserContext(browser_context);
+  mojo::PendingRemote<network::mojom::URLLoaderFactory> interceptor_remote;
+  new InterceptingURLLoaderFactory(
+      protocol_registry->intercept_handlers(),
+      interceptor_remote.InitWithNewPipeAndPassReceiver(),
+      std::move(target_factory_remote));
+
   new ProxyingURLLoaderFactory(
-      web_request.get(), protocol_registry->intercept_handlers(),
-      render_process_id,
+      web_request.get(), render_process_id,
       frame_host ? frame_host->GetRoutingID() : MSG_ROUTING_NONE,
       frame_host ? frame_host->GetRenderViewHost()->GetRoutingID()
                  : MSG_ROUTING_NONE,
       &next_id_, std::move(navigation_ui_data), std::move(navigation_id),
-      std::move(proxied_receiver), std::move(target_factory_remote),
+      std::move(proxied_receiver), std::move(interceptor_remote),
       std::move(header_client_receiver), type);
 
   if (bypass_redirect_checks)

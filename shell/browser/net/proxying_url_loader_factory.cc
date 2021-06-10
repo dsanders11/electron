@@ -9,8 +9,6 @@
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
-#include "base/command_line.h"
-#include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "content/public/browser/browser_context.h"
@@ -24,7 +22,6 @@
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "services/network/public/cpp/features.h"
 #include "shell/browser/net/asar/asar_url_loader.h"
-#include "shell/common/options_switches.h"
 #include "url/origin.h"
 
 namespace electron {
@@ -738,7 +735,6 @@ void ProxyingURLLoaderFactory::InProgressRequest::OnRequestError(
 
 ProxyingURLLoaderFactory::ProxyingURLLoaderFactory(
     WebRequestAPI* web_request_api,
-    const HandlersMap& intercepted_handlers,
     int render_process_id,
     int frame_routing_id,
     int view_routing_id,
@@ -751,7 +747,6 @@ ProxyingURLLoaderFactory::ProxyingURLLoaderFactory(
         header_client_receiver,
     content::ContentBrowserClient::URLLoaderFactoryType loader_factory_type)
     : web_request_api_(web_request_api),
-      intercepted_handlers_(intercepted_handlers),
       render_process_id_(render_process_id),
       frame_routing_id_(frame_routing_id),
       view_routing_id_(view_routing_id),
@@ -768,53 +763,15 @@ ProxyingURLLoaderFactory::ProxyingURLLoaderFactory(
 
   if (header_client_receiver)
     url_loader_header_client_receiver_.Bind(std::move(header_client_receiver));
-
-  ignore_connections_limit_domains_ = base::SplitString(
-      base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
-          switches::kIgnoreConnectionsLimit),
-      ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
-}
-
-bool ProxyingURLLoaderFactory::ShouldIgnoreConnectionsLimit(
-    const network::ResourceRequest& request) {
-  for (const auto& domain : ignore_connections_limit_domains_) {
-    if (request.url.DomainIs(domain)) {
-      return true;
-    }
-  }
-  return false;
 }
 
 void ProxyingURLLoaderFactory::CreateLoaderAndStart(
     mojo::PendingReceiver<network::mojom::URLLoader> loader,
     int32_t request_id,
     uint32_t options,
-    const network::ResourceRequest& original_request,
+    const network::ResourceRequest& request,
     mojo::PendingRemote<network::mojom::URLLoaderClient> client,
     const net::MutableNetworkTrafficAnnotationTag& traffic_annotation) {
-  // Take a copy so we can mutate the request.
-  network::ResourceRequest request = original_request;
-
-  if (ShouldIgnoreConnectionsLimit(request)) {
-    request.priority = net::RequestPriority::MAXIMUM_PRIORITY;
-    request.load_flags |= net::LOAD_IGNORE_LIMITS;
-  }
-
-  // Check if user has intercepted this scheme.
-  auto it = intercepted_handlers_.find(request.url.scheme());
-  if (it != intercepted_handlers_.end()) {
-    mojo::PendingRemote<network::mojom::URLLoaderFactory> loader_remote;
-    this->Clone(loader_remote.InitWithNewPipeAndPassReceiver());
-
-    // <scheme, <type, handler>>
-    it->second.second.Run(
-        request, base::BindOnce(&ElectronURLLoaderFactory::StartLoading,
-                                std::move(loader), request_id, options, request,
-                                std::move(client), traffic_annotation,
-                                std::move(loader_remote), it->second.first));
-    return;
-  }
-
   // The loader of ServiceWorker forbids loading scripts from file:// URLs, and
   // Chromium does not provide a way to override this behavior. So in order to
   // make ServiceWorker work with file:// URLs, we have to intercept its
