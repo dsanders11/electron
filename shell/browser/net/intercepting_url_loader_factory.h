@@ -17,6 +17,7 @@
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/network/public/cpp/resource_request.h"
+#include "services/network/public/cpp/self_deleting_url_loader_factory.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 #include "services/network/public/mojom/url_loader.mojom.h"
 #include "shell/browser/net/electron_url_loader_factory.h"
@@ -24,7 +25,8 @@
 
 namespace electron {
 
-class InterceptingURLLoaderFactory : public network::mojom::URLLoaderFactory {
+class InterceptingURLLoaderFactory
+    : public network::SelfDeletingURLLoaderFactory {
  public:
   class InterceptedRequest : public network::mojom::URLLoader,
                              public network::mojom::URLLoaderClient {
@@ -130,13 +132,9 @@ class InterceptingURLLoaderFactory : public network::mojom::URLLoaderFactory {
       mojo::PendingRemote<network::mojom::URLLoaderClient> client,
       const net::MutableNetworkTrafficAnnotationTag& traffic_annotation)
       override;
-  void Clone(mojo::PendingReceiver<network::mojom::URLLoaderFactory>
-                 loader_receiver) override;
 
  private:
   void OnProxyingFactoryError();
-  void OnInterceptorBindingError();
-  void MaybeDeleteThis();
 
   bool ShouldIgnoreConnectionsLimit(const network::ResourceRequest& request);
 
@@ -149,7 +147,6 @@ class InterceptingURLLoaderFactory : public network::mojom::URLLoaderFactory {
   // In this way we can avoid using code from api namespace in this file.
   const InterceptHandlersMap& intercepted_handlers_;
 
-  mojo::ReceiverSet<network::mojom::URLLoaderFactory> interceptor_receivers_;
   mojo::Remote<network::mojom::URLLoaderFactory> target_factory_remote_;
 
   std::vector<std::string> ignore_connections_limit_domains_;

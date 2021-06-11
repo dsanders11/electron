@@ -38,16 +38,16 @@ InterceptingURLLoaderFactory::InterceptedRequest::InterceptedRequest(
       request_id_(request_id),
       options_(options),
       request_(request),
-      traffic_annotation_(traffic_annotation),
-      client_(std::move(client)),
-      target_factory_remote_(std::move(target_factory_remote)) {
+      traffic_annotation_(traffic_annotation) {
   loader_receiver_.Bind(std::move(loader_receiver));
   loader_receiver_.set_disconnect_handler(base::BindOnce(
       &InterceptingURLLoaderFactory::InterceptedRequest::OnLoaderDisconnect,
       base::Unretained(this)));
+  client_.Bind(std::move(client));
   client_.set_disconnect_handler(base::BindOnce(
       &InterceptingURLLoaderFactory::InterceptedRequest::OnClientDisconnect,
       base::Unretained(this)));
+  target_factory_remote_.Bind(std::move(target_factory_remote));
   // TODO - Disconnect handler for target_factory_remote_?
 
   // TODO - Set disconnect handlers for the dynamically bound stuff - actually
@@ -106,40 +106,32 @@ void InterceptingURLLoaderFactory::InterceptedRequest::FollowRedirect(
 void InterceptingURLLoaderFactory::InterceptedRequest::SetPriority(
     net::RequestPriority priority,
     int32_t intra_priority_value) {
-  // TODO - Maybe remove all of these is_bound checks? There's logic
-  // to reset the receiver if the target remote is disconnected, so
-  // in theory we shouldn't receive a message if the target is disconnected
-  if (target_loader_.is_bound()) {
-    target_loader_->SetPriority(priority, intra_priority_value);
-  }
+  DCHECK(target_loader_.is_bound());
+  target_loader_->SetPriority(priority, intra_priority_value);
 }
 
 void InterceptingURLLoaderFactory::InterceptedRequest::
     PauseReadingBodyFromNet() {
-  if (target_loader_.is_bound()) {
-    target_loader_->PauseReadingBodyFromNet();
-  }
+  DCHECK(target_loader_.is_bound());
+  target_loader_->PauseReadingBodyFromNet();
 }
 
 void InterceptingURLLoaderFactory::InterceptedRequest::
     ResumeReadingBodyFromNet() {
-  if (target_loader_.is_bound()) {
-    target_loader_->ResumeReadingBodyFromNet();
-  }
+  DCHECK(target_loader_.is_bound());
+  target_loader_->ResumeReadingBodyFromNet();
 }
 
 void InterceptingURLLoaderFactory::InterceptedRequest::OnReceiveEarlyHints(
     network::mojom::EarlyHintsPtr early_hints) {
-  if (client_.is_bound()) {
-    client_->OnReceiveEarlyHints(std::move(early_hints));
-  }
+  DCHECK(client_.is_bound());
+  client_->OnReceiveEarlyHints(std::move(early_hints));
 }
 
 void InterceptingURLLoaderFactory::InterceptedRequest::OnReceiveResponse(
     network::mojom::URLResponseHeadPtr head) {
-  if (client_.is_bound()) {
-    client_->OnReceiveResponse(std::move(head));
-  }
+  DCHECK(client_.is_bound());
+  client_->OnReceiveResponse(std::move(head));
 }
 
 void InterceptingURLLoaderFactory::InterceptedRequest::OnReceiveRedirect(
@@ -147,47 +139,40 @@ void InterceptingURLLoaderFactory::InterceptedRequest::OnReceiveRedirect(
     network::mojom::URLResponseHeadPtr head) {
   // Save the redirect info so the request can be updated in |FollowRedirect|
   redirect_info_ = redirect_info;
-  if (client_.is_bound()) {
-    client_->OnReceiveRedirect(redirect_info, std::move(head));
-  }
+  DCHECK(client_.is_bound());
+  client_->OnReceiveRedirect(redirect_info, std::move(head));
 }
 
 void InterceptingURLLoaderFactory::InterceptedRequest::OnUploadProgress(
     int64_t current_position,
     int64_t total_size,
     OnUploadProgressCallback callback) {
-  if (client_.is_bound()) {
-    client_->OnUploadProgress(current_position, total_size,
-                              std::move(callback));
-  }
+  DCHECK(client_.is_bound());
+  client_->OnUploadProgress(current_position, total_size, std::move(callback));
 }
 
 void InterceptingURLLoaderFactory::InterceptedRequest::OnReceiveCachedMetadata(
     mojo_base::BigBuffer data) {
-  if (client_.is_bound()) {
-    client_->OnReceiveCachedMetadata(std::move(data));
-  }
+  DCHECK(client_.is_bound());
+  client_->OnReceiveCachedMetadata(std::move(data));
 }
 
 void InterceptingURLLoaderFactory::InterceptedRequest::OnTransferSizeUpdated(
     int32_t transfer_size_diff) {
-  if (client_.is_bound()) {
-    client_->OnTransferSizeUpdated(transfer_size_diff);
-  }
+  DCHECK(client_.is_bound());
+  client_->OnTransferSizeUpdated(transfer_size_diff);
 }
 
 void InterceptingURLLoaderFactory::InterceptedRequest::
     OnStartLoadingResponseBody(mojo::ScopedDataPipeConsumerHandle body) {
-  if (client_.is_bound()) {
-    client_->OnStartLoadingResponseBody(std::move(body));
-  }
+  DCHECK(client_.is_bound());
+  client_->OnStartLoadingResponseBody(std::move(body));
 }
 
 void InterceptingURLLoaderFactory::InterceptedRequest::OnComplete(
     const network::URLLoaderCompletionStatus& status) {
-  if (client_.is_bound()) {
-    client_->OnComplete(status);
-  }
+  DCHECK(client_.is_bound());
+  client_->OnComplete(status);
 }
 
 void InterceptingURLLoaderFactory::InterceptedRequest::
@@ -305,15 +290,12 @@ InterceptingURLLoaderFactory::InterceptingURLLoaderFactory(
     const InterceptHandlersMap& intercepted_handlers,
     mojo::PendingReceiver<network::mojom::URLLoaderFactory> loader_receiver,
     mojo::PendingRemote<network::mojom::URLLoaderFactory> target_factory_remote)
-    : intercepted_handlers_(intercepted_handlers) {
+    : network::SelfDeletingURLLoaderFactory(std::move(loader_receiver)),
+      intercepted_handlers_(intercepted_handlers) {
   target_factory_remote_.Bind(std::move(target_factory_remote));
   target_factory_remote_.set_disconnect_handler(
       base::BindOnce(&InterceptingURLLoaderFactory::OnProxyingFactoryError,
                      base::Unretained(this)));
-  interceptor_receivers_.Add(this, std::move(loader_receiver));
-  interceptor_receivers_.set_disconnect_handler(base::BindRepeating(
-      &InterceptingURLLoaderFactory::OnInterceptorBindingError,
-      base::Unretained(this)));
 
   ignore_connections_limit_domains_ = base::SplitString(
       base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
@@ -353,39 +335,16 @@ void InterceptingURLLoaderFactory::CreateLoaderAndStart(
       target_factory_remote.InitWithNewPipeAndPassReceiver());
 
   // Lifetime is tied to its receivers
-  // TODO - Make an InterceptedRequest::Create?
   new InterceptedRequest(intercepted_handlers_, std::move(loader), request_id,
                          options, request, std::move(client),
                          traffic_annotation, std::move(target_factory_remote));
 }
 
-void InterceptingURLLoaderFactory::Clone(
-    mojo::PendingReceiver<network::mojom::URLLoaderFactory> loader_receiver) {
-  interceptor_receivers_.Add(this, std::move(loader_receiver));
-}
-
 void InterceptingURLLoaderFactory::OnProxyingFactoryError() {
   // TODO - Update this
   target_factory_remote_.reset();
-  interceptor_receivers_.Clear();
 
-  MaybeDeleteThis();
-}
-
-void InterceptingURLLoaderFactory::OnInterceptorBindingError() {
-  // TODO - Update this
-  if (interceptor_receivers_.empty())
-    target_factory_remote_.reset();
-
-  MaybeDeleteThis();
-}
-
-void InterceptingURLLoaderFactory::MaybeDeleteThis() {
-  // TODO - Update this, only rely on receivers existing
-  if (target_factory_remote_.is_bound() || !interceptor_receivers_.empty())
-    return;
-
-  delete this;
+  DisconnectReceiversAndDestroy();
 }
 
 }  // namespace electron
