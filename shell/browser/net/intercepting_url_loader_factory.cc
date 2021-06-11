@@ -40,6 +40,7 @@ InterceptingURLLoaderFactory::InterceptedRequest::InterceptedRequest(
       request_(request),
       traffic_annotation_(traffic_annotation) {
   loader_receiver_.Bind(std::move(loader_receiver));
+  loader_receiver_.Pause();
   loader_receiver_.set_disconnect_handler(base::BindOnce(
       &InterceptingURLLoaderFactory::InterceptedRequest::OnLoaderDisconnect,
       base::Unretained(this)));
@@ -216,6 +217,7 @@ void InterceptingURLLoaderFactory::InterceptedRequest::ContinueRequest() {
         target_loader_.BindNewPipeAndPassReceiver(), request_id_, options_,
         request_, client_receiver_.BindNewPipeAndPassRemote(),
         traffic_annotation_);
+    loader_receiver_.Resume();
   }
 
   pending_follow_redirect_params_.reset();
@@ -249,6 +251,7 @@ void InterceptingURLLoaderFactory::InterceptedRequest::SendResponse(
       request_, client_receiver_.BindNewPipeAndPassRemote(),
       traffic_annotation_, std::move(target_factory_pending_remote), type,
       args);
+  loader_receiver_.Resume();
 }
 
 void InterceptingURLLoaderFactory::InterceptedRequest::
