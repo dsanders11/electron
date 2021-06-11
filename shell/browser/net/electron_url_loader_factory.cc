@@ -184,6 +184,8 @@ ElectronURLLoaderFactory::RedirectedRequest::RedirectedRequest(
       request_(request),
       client_(std::move(client)),
       traffic_annotation_(traffic_annotation) {
+  // TODO - Do these need to use weak_factory_.GetWeakPtr()?
+  //        There might be races with disconnects
   loader_receiver_.Bind(std::move(loader_receiver));
   loader_receiver_.set_disconnect_handler(base::BindOnce(
       &ElectronURLLoaderFactory::RedirectedRequest::OnMojoDisconnect,
@@ -221,6 +223,8 @@ void ElectronURLLoaderFactory::RedirectedRequest::FollowRedirect(
   request_.referrer_policy = redirect_info_.new_referrer_policy;
 
   // Create a new loader to process the redirect and destroy this one
+  // TODO - Maybe handle this instead of DCHECK?
+  DCHECK(target_factory_remote_.is_bound());
   target_factory_remote_->CreateLoaderAndStart(
       loader_receiver_.Unbind(), request_id_, options_, request_,
       std::move(client_), traffic_annotation_);
@@ -228,11 +232,13 @@ void ElectronURLLoaderFactory::RedirectedRequest::FollowRedirect(
 }
 
 void ElectronURLLoaderFactory::RedirectedRequest::OnMojoDisconnect() {
+  // TODO - Maybe disconnect everything else first so no races can happen?
   // Can't receive new requests so it's safe to delete
   delete this;
 }
 
 void ElectronURLLoaderFactory::RedirectedRequest::OnTargetFactoryError() {
+  // TODO - Maybe disconnect everything else first so no races can happen?
   // Can't create a new loader at this point, so can't continue on
   mojo::Remote<network::mojom::URLLoaderClient> client_remote(
       std::move(client_));

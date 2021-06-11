@@ -211,6 +211,7 @@ void InterceptingURLLoaderFactory::InterceptedRequest::ContinueRequest() {
     client_receiver_.reset();
 
     // Continue on to the target factory
+    DCHECK(target_factory_remote_.is_bound());
     target_factory_remote_->CreateLoaderAndStart(
         target_loader_.BindNewPipeAndPassReceiver(), request_id_, options_,
         request_, client_receiver_.BindNewPipeAndPassRemote(),
@@ -294,7 +295,7 @@ InterceptingURLLoaderFactory::InterceptingURLLoaderFactory(
       intercepted_handlers_(intercepted_handlers) {
   target_factory_remote_.Bind(std::move(target_factory_remote));
   target_factory_remote_.set_disconnect_handler(
-      base::BindOnce(&InterceptingURLLoaderFactory::OnProxyingFactoryError,
+      base::BindOnce(&InterceptingURLLoaderFactory::OnTargetFactoryDisconnect,
                      base::Unretained(this)));
 
   ignore_connections_limit_domains_ = base::SplitString(
@@ -306,7 +307,7 @@ InterceptingURLLoaderFactory::InterceptingURLLoaderFactory(
 InterceptingURLLoaderFactory::~InterceptingURLLoaderFactory() = default;
 
 bool InterceptingURLLoaderFactory::ShouldIgnoreConnectionsLimit(
-    const network::ResourceRequest& request) {
+    const network::ResourceRequest& request) const {
   for (const auto& domain : ignore_connections_limit_domains_) {
     if (request.url.DomainIs(domain)) {
       return true;
@@ -340,10 +341,8 @@ void InterceptingURLLoaderFactory::CreateLoaderAndStart(
                          traffic_annotation, std::move(target_factory_remote));
 }
 
-void InterceptingURLLoaderFactory::OnProxyingFactoryError() {
-  // TODO - Update this
-  target_factory_remote_.reset();
-
+void InterceptingURLLoaderFactory::OnTargetFactoryDisconnect() {
+  // Without a bound |target_factory_remote_| this can't intercept a request
   DisconnectReceiversAndDestroy();
 }
 

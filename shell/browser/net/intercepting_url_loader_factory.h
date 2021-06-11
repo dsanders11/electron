@@ -134,9 +134,10 @@ class InterceptingURLLoaderFactory
       override;
 
  private:
-  void OnProxyingFactoryError();
+  void OnTargetFactoryDisconnect();
 
-  bool ShouldIgnoreConnectionsLimit(const network::ResourceRequest& request);
+  bool ShouldIgnoreConnectionsLimit(
+      const network::ResourceRequest& request) const;
 
   // This is passed from api::Protocol.
   //
