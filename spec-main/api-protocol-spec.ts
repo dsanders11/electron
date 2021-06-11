@@ -541,11 +541,12 @@ describe('protocol module', () => {
 
     it('does not crash when next and callback are both called, in either order', async () => {
       interceptStringProtocol('http', (request, callback, next) => {
-        callback(text);
+        callback('intercepted');
         expect(() => next()).to.throw(Error);
       });
       let r = await ajax('http://fake-host');
-      expect(r.data).to.be.equal(text);
+      expect(r.data).to.be.equal('intercepted');
+      uninterceptProtocol('http');
 
       const port = await createServer();
       interceptStringProtocol('http', (request, callback, next) => {
@@ -553,6 +554,7 @@ describe('protocol module', () => {
         expect(() => callback('foobar')).to.throw(Error);
       });
       r = await ajax(`http://127.0.0.1:${port}`);
+      expect(r.data).to.not.be.equal('intercepted');
       expect(r.data).to.equal(text);
     });
   });
