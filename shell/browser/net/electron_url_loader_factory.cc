@@ -169,6 +169,79 @@ void OnWrite(std::unique_ptr<WriteData> write_data, MojoResult result) {
 
 }  // namespace
 
+ElectronURLLoaderFactory::RedirectedRequest::RedirectedRequest(
+    const net::RedirectInfo& redirect_info,
+    mojo::PendingReceiver<network::mojom::URLLoader> loader_receiver,
+    int32_t request_id,
+    uint32_t options,
+    const network::ResourceRequest& request,
+    mojo::PendingRemote<network::mojom::URLLoaderClient> client,
+    const net::MutableNetworkTrafficAnnotationTag& traffic_annotation,
+    mojo::PendingRemote<network::mojom::URLLoaderFactory> target_factory_remote)
+    : redirect_info_(redirect_info),
+      request_id_(request_id),
+      options_(options),
+      request_(request),
+      client_(std::move(client)),
+      traffic_annotation_(traffic_annotation) {
+  loader_receiver_.Bind(std::move(loader_receiver));
+  loader_receiver_.set_disconnect_handler(base::BindOnce(
+      &ElectronURLLoaderFactory::RedirectedRequest::OnMojoDisconnect,
+      base::Unretained(this)));
+  target_factory_remote_.Bind(std::move(target_factory_remote));
+  target_factory_remote_.set_disconnect_handler(base::BindOnce(
+      &ElectronURLLoaderFactory::RedirectedRequest::OnTargetFactoryError,
+      base::Unretained(this)));
+}
+
+ElectronURLLoaderFactory::RedirectedRequest::~RedirectedRequest() = default;
+
+void ElectronURLLoaderFactory::RedirectedRequest::FollowRedirect(
+    const std::vector<std::string>& removed_headers,
+    const net::HttpRequestHeaders& modified_headers,
+    const net::HttpRequestHeaders& modified_cors_exempt_headers,
+    const absl::optional<GURL>& new_url) {
+  // Update |request_| with info from the redirect, so that it's accurate
+  // The following references code in WorkerScriptLoader::FollowRedirect
+  bool should_clear_upload = false;
+  net::RedirectUtil::UpdateHttpRequest(
+      request_.url, request_.method, redirect_info_, removed_headers,
+      modified_headers, &request_.headers, &should_clear_upload);
+  request_.cors_exempt_headers.MergeFrom(modified_cors_exempt_headers);
+  for (const std::string& name : removed_headers)
+    request_.cors_exempt_headers.RemoveHeader(name);
+
+  if (should_clear_upload)
+    request_.request_body = nullptr;
+
+  request_.url = redirect_info_.new_url;
+  request_.method = redirect_info_.new_method;
+  request_.site_for_cookies = redirect_info_.new_site_for_cookies;
+  request_.referrer = GURL(redirect_info_.new_referrer);
+  request_.referrer_policy = redirect_info_.new_referrer_policy;
+
+  // Create a new loader to process the redirect and destroy this one
+  target_factory_remote_->CreateLoaderAndStart(
+      loader_receiver_.Unbind(), request_id_, options_, request_,
+      std::move(client_), traffic_annotation_);
+  delete this;
+}
+
+void ElectronURLLoaderFactory::RedirectedRequest::OnMojoDisconnect() {
+  // Can't receive new requests so it's safe to delete
+  delete this;
+}
+
+void ElectronURLLoaderFactory::RedirectedRequest::OnTargetFactoryError() {
+  // Can't create a new loader at this point, so can't continue on
+  mojo::Remote<network::mojom::URLLoaderClient> client_remote(
+      std::move(client_));
+  client_remote->OnComplete(
+      network::URLLoaderCompletionStatus(net::ERR_FAILED));
+
+  delete this;
+}
+
 // static
 mojo::PendingRemote<network::mojom::URLLoaderFactory>
 ElectronURLLoaderFactory::Create(ProtocolType type,
@@ -201,10 +274,19 @@ void ElectronURLLoaderFactory::CreateLoaderAndStart(
     mojo::PendingRemote<network::mojom::URLLoaderClient> client,
     const net::MutableNetworkTrafficAnnotationTag& traffic_annotation) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  handler_.Run(request,
-               base::BindOnce(&ElectronURLLoaderFactory::StartLoading,
-                              std::move(loader), request_id, options, request,
-                              std::move(client), traffic_annotation, type_));
+
+  // |StartLoading| is used for both intercepted and registered protocols,
+  // and on redirects it needs a factory to use to create a loader for the
+  // new request. So in this case, this factory is the target factory.
+  mojo::PendingRemote<network::mojom::URLLoaderFactory> pending_remote;
+  // TODO - This needs to be upstreamed
+  Clone(pending_remote.InitWithNewPipeAndPassReceiver());
+
+  handler_.Run(
+      request,
+      base::BindOnce(&ElectronURLLoaderFactory::StartLoading, std::move(loader),
+                     request_id, options, request, std::move(client),
+                     traffic_annotation, std::move(pending_remote), type_));
 }
 
 // static
@@ -227,6 +309,7 @@ void ElectronURLLoaderFactory::StartLoading(
     const network::ResourceRequest& request,
     mojo::PendingRemote<network::mojom::URLLoaderClient> client,
     const net::MutableNetworkTrafficAnnotationTag& traffic_annotation,
+    mojo::PendingRemote<network::mojom::URLLoaderFactory> target_factory,
     ProtocolType type,
     gin::Arguments* args) {
   // Send network error when there is no argument passed.
@@ -276,13 +359,6 @@ void ElectronURLLoaderFactory::StartLoading(
         request.url.Resolve(location),
         net::RedirectUtil::GetReferrerPolicyHeader(head->headers.get()), false);
 
-    network::ResourceRequest new_request = request;
-    new_request.method = redirect_info.new_method;
-    new_request.url = redirect_info.new_url;
-    new_request.site_for_cookies = redirect_info.new_site_for_cookies;
-    new_request.referrer = GURL(redirect_info.new_referrer);
-    new_request.referrer_policy = redirect_info.new_referrer_policy;
-
     DCHECK(client.is_valid());
 
     mojo::Remote<network::mojom::URLLoaderClient> client_remote(
@@ -290,8 +366,15 @@ void ElectronURLLoaderFactory::StartLoading(
 
     client_remote->OnReceiveRedirect(redirect_info, std::move(head));
 
-    // Unbound client, so it an be passed to sub-methods
-    client = client_remote.Unbind();
+    // Bind the URLLoader receiver and wait for a FollowRedirect request, or for
+    // the remote to disconnect, which will happen if the request is aborted.
+    // That may happen when the redirect is to a different scheme, which will
+    // cause the URL loader to be destroyed and a new one created using the
+    // factory for that scheme.
+    new RedirectedRequest(redirect_info, std::move(loader), request_id, options,
+                          request, client_remote.Unbind(), traffic_annotation,
+                          std::move(target_factory));
+
     return;
   }
 
@@ -330,7 +413,8 @@ void ElectronURLLoaderFactory::StartLoading(
         return;
       }
       StartLoading(std::move(loader), request_id, options, request,
-                   std::move(client), traffic_annotation, type, args);
+                   std::move(client), traffic_annotation,
+                   std::move(target_factory), type, args);
       break;
   }
 }

@@ -48,6 +48,7 @@ InterceptingURLLoaderFactory::InterceptedRequest::InterceptedRequest(
   client_.set_disconnect_handler(base::BindOnce(
       &InterceptingURLLoaderFactory::InterceptedRequest::OnClientDisconnect,
       base::Unretained(this)));
+  // TODO - Disconnect handler for target_factory_remote_?
 
   // TODO - Set disconnect handlers for the dynamically bound stuff - actually
   // this needs to be done on each binding
@@ -249,10 +250,19 @@ void InterceptingURLLoaderFactory::InterceptedRequest::SendResponse(
   target_loader_.reset();
   client_receiver_.reset();
 
+  // ElectronURLLoaderFactory::StartLoading is used for both intercepted and
+  // registered protocols, and on redirects it needs a factory to use to
+  // create a loader for the new request, so provide it the target factory.
+  mojo::PendingRemote<network::mojom::URLLoaderFactory>
+      target_factory_pending_remote;
+  target_factory_remote_->Clone(
+      target_factory_pending_remote.InitWithNewPipeAndPassReceiver());
+
   ElectronURLLoaderFactory::StartLoading(
       target_loader_.BindNewPipeAndPassReceiver(), request_id_, options_,
       request_, client_receiver_.BindNewPipeAndPassRemote(),
-      traffic_annotation_, type, args);
+      traffic_annotation_, std::move(target_factory_pending_remote), type,
+      args);
 }
 
 void InterceptingURLLoaderFactory::InterceptedRequest::
