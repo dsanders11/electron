@@ -1,0 +1,35 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: David Sanders <dsanders11@ucsbalum.com>
+Date: Fri, 11 Jun 2021 21:39:21 -0700
+Subject: Move SelfDeletingURLLoaderFactory::Clone from private to protected
+
+Change has been upstreamed and merged
+(https://chromium-review.googlesource.com/c/chromium/src/+/2955708),
+remove this patch once it makes its way into Electron.
+
+diff --git a/services/network/public/cpp/self_deleting_url_loader_factory.h b/services/network/public/cpp/self_deleting_url_loader_factory.h
+index 8e84590e58d08468b1203d0e8e3f7a8f8e166994..34f9b48f7e97857a5ee34ddf1091e112b8b5e668 100644
+--- a/services/network/public/cpp/self_deleting_url_loader_factory.h
++++ b/services/network/public/cpp/self_deleting_url_loader_factory.h
+@@ -29,6 +29,10 @@ class COMPONENT_EXPORT(NETWORK_CPP) SelfDeletingURLLoaderFactory
+ 
+   ~SelfDeletingURLLoaderFactory() override;
+ 
++  // The override below is marked as |final| to make sure derived classes do not
++  // accidentally side-step lifetime management.
++  void Clone(mojo::PendingReceiver<mojom::URLLoaderFactory> loader) final;
++
+   // Sometimes a derived class can no longer function, even when the set of
+   // |receivers_| is still non-empty.  This should be rare (typically the
+   // lifetime of users of mojo::Remote<mojom::URLLoaderFactory> should
+@@ -44,10 +48,6 @@ class COMPONENT_EXPORT(NETWORK_CPP) SelfDeletingURLLoaderFactory
+   THREAD_CHECKER(thread_checker_);
+ 
+  private:
+-  // The override below is marked as |final| to make sure derived classes do not
+-  // accidentally side-step lifetime management.
+-  void Clone(mojo::PendingReceiver<mojom::URLLoaderFactory> loader) final;
+-
+   void OnDisconnect();
+ 
+   mojo::ReceiverSet<mojom::URLLoaderFactory> receivers_;
