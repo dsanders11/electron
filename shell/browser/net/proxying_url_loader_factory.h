@@ -153,7 +153,10 @@ class ProxyingURLLoaderFactory
     void ContinueToStartRequest(State state_on_error, int error_code);
     void ContinueToStartRequestWithOk();
     void ContinueToHandleOverrideHeaders(int error_code);
-    void ContinueToResponseStarted(int error_code);
+    void OverwriteHeadersAndContinueToResponseStarted(int error_code);
+    void AssignParsedHeadersAndContinueToResponseStarted(
+        network::mojom::ParsedHeadersPtr parsed_headers);
+    void ContinueToResponseStarted();
     void ContinueToBeforeRedirect(const net::RedirectInfo& redirect_info,
                                   int error_code);
     void HandleResponseOrRedirectHeaders(
