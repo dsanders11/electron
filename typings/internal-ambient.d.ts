@@ -147,6 +147,7 @@ declare namespace NodeJS {
     statusCode: number;
     statusMessage: string;
     httpVersion: { major: number, minor: number };
+    headers: Record<string, string[]>;
     rawHeaders: { key: string, value: string }[];
   };
 

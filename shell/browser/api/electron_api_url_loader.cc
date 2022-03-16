@@ -578,9 +578,8 @@ void SimpleURLLoaderWrapper::OnResponseStarted(
   gin::Dictionary dict = gin::Dictionary::CreateEmpty(isolate);
   dict.Set("statusCode", response_head.headers->response_code());
   dict.Set("statusMessage", response_head.headers->GetStatusText());
+  dict.Set("headers", response_head.headers.get());
   dict.Set("httpVersion", response_head.headers->GetHttpVersion());
-  // Note that |response_head.headers| are filtered by Chromium and should not
-  // be used here.
   DCHECK(!response_head.raw_response_headers.empty());
   dict.Set("rawHeaders", response_head.raw_response_headers);
   Emit("response-started", final_url, dict);

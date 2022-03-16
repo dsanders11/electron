@@ -59,29 +59,18 @@ class IncomingMessage extends Readable {
 
   get headers () {
     const filteredHeaders: Record<string, string | string[]> = {};
-    const { rawHeaders } = this._responseHead;
-    rawHeaders.forEach(header => {
-      const keyLowerCase = header.key.toLowerCase();
-      if (Object.prototype.hasOwnProperty.call(filteredHeaders, keyLowerCase) &&
-          discardableDuplicateHeaders.has(keyLowerCase)) {
-        // do nothing with discardable duplicate headers
+    const { headers } = this._responseHead;
+    Object.keys(headers).forEach(header => {
+      if (header === 'set-cookie') {
+        // keep set-cookie as an array per Node.js rules
+        // see https://nodejs.org/api/http.html#http_message_headers
+        filteredHeaders[header] = headers[header];
+      } else if (discardableDuplicateHeaders.has(header)) {
+        // do not join discardable duplicate headers, instead keep the first
+        filteredHeaders[header] = headers[header][0];
       } else {
-        if (keyLowerCase === 'set-cookie') {
-          // keep set-cookie as an array per Node.js rules
-          // see https://nodejs.org/api/http.html#http_message_headers
-          if (Object.prototype.hasOwnProperty.call(filteredHeaders, keyLowerCase)) {
-            (filteredHeaders[keyLowerCase] as string[]).push(header.value);
-          } else {
-            filteredHeaders[keyLowerCase] = [header.value];
-          }
-        } else {
-          // for non-cookie headers, the values are joined together with ', '
-          if (Object.prototype.hasOwnProperty.call(filteredHeaders, keyLowerCase)) {
-            filteredHeaders[keyLowerCase] += `, ${header.value}`;
-          } else {
-            filteredHeaders[keyLowerCase] = header.value;
-          }
-        }
+        // for everything else, the values are joined together with ', '
+        filteredHeaders[header] = headers[header].join(', ');
       }
     });
     return filteredHeaders;
