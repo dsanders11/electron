@@ -18,6 +18,7 @@
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/system/data_pipe_producer.h"
 #include "mojo/public/cpp/system/file_data_source.h"
+#include "mojo/public/cpp/system/string_data_source.h"
 #include "net/base/filename_util.h"
 #include "net/base/mime_sniffer.h"
 #include "net/base/mime_util.h"
@@ -150,26 +151,34 @@ class AsarURLLoader : public network::mojom::URLLoader {
       return;
     }
 
-    // Note that while the |Archive| already opens a |base::File|, we still need
-    // to create a new |base::File| here, as it might be accessed by multiple
-    // requests at the same time.
-    base::File file(info.unpacked ? real_path : archive->path(),
-                    base::File::FLAG_OPEN | base::File::FLAG_READ);
-    auto file_data_source =
-        std::make_unique<mojo::FileDataSource>(file.Duplicate());
     std::unique_ptr<mojo::DataPipeProducer::DataSource> readable_data_source;
-    mojo::FileDataSource* file_data_source_raw = file_data_source.get();
-    AsarFileValidator* file_validator_raw = nullptr;
     uint32_t block_size = 0;
-    if (info.integrity.has_value()) {
-      block_size = info.integrity.value().block_size;
-      auto asar_validator = std::make_unique<AsarFileValidator>(
-          std::move(info.integrity.value()), std::move(file));
-      file_validator_raw = asar_validator.get();
-      readable_data_source.reset(new mojo::FilteredDataSource(
-          std::move(file_data_source), std::move(asar_validator)));
+    AsarFileValidator* file_validator_raw = nullptr;
+    mojo::FileDataSource* file_data_source_raw = nullptr;
+
+    if (archive->has_file()) {
+      // Note that while the |Archive| already opens a |base::File|, we still need
+      // to create a new |base::File| here, as it might be accessed by multiple
+      // requests at the same time.
+      base::File file(info.unpacked ? real_path : archive->path(),
+                      base::File::FLAG_OPEN | base::File::FLAG_READ);
+      auto file_data_source =
+          std::make_unique<mojo::FileDataSource>(file.Duplicate());
+      file_data_source_raw = file_data_source.get();
+      if (info.integrity.has_value()) {
+        block_size = info.integrity.value().block_size;
+        auto asar_validator = std::make_unique<AsarFileValidator>(
+            std::move(info.integrity.value()), std::move(file));
+        file_validator_raw = asar_validator.get();
+        readable_data_source.reset(new mojo::FilteredDataSource(
+            std::move(file_data_source), std::move(asar_validator)));
+      } else {
+        readable_data_source = std::move(file_data_source);
+      }
     } else {
-      readable_data_source = std::move(file_data_source);
+      base::StringPiece string_piece(reinterpret_cast<const char*>(archive->data()), archive->length());
+      readable_data_source = std::make_unique<mojo::StringDataSource>(
+          string_piece, mojo::StringDataSource::AsyncWritingMode::STRING_MAY_BE_INVALIDATED_BEFORE_COMPLETION);
     }
 
     std::vector<char> initial_read_buffer(
@@ -317,18 +326,24 @@ class AsarURLLoader : public network::mojom::URLLoader {
       }
     }
 
-    // In case of a range request, seek to the appropriate position before
-    // sending the remaining bytes asynchronously. Under normal conditions
-    // (i.e., no range request) this Seek is effectively a no-op.
-    //
-    // Note that in Electron we also need to add file offset.
-    file_data_source_raw->SetRange(
-        first_byte_to_send + info.offset,
-        first_byte_to_send + info.offset + total_bytes_to_send);
-    if (file_validator_raw)
-      file_validator_raw->SetRange(info.offset + first_byte_to_send,
-                                   total_bytes_dropped_from_head,
-                                   info.offset + info.size);
+    if (archive->has_file()) {
+      // In case of a range request, seek to the appropriate position before
+      // sending the remaining bytes asynchronously. Under normal conditions
+      // (i.e., no range request) this Seek is effectively a no-op.
+      //
+      // Note that in Electron we also need to add file offset.
+      file_data_source_raw->SetRange(
+          first_byte_to_send + info.offset,
+          first_byte_to_send + info.offset + total_bytes_to_send);
+      if (file_validator_raw)
+        file_validator_raw->SetRange(info.offset + first_byte_to_send,
+                                    total_bytes_dropped_from_head,
+                                    info.offset + info.size);
+    } else {
+      base::StringPiece string_piece(reinterpret_cast<const char*>(archive->data() + first_byte_to_send + info.offset), total_bytes_to_send);
+      readable_data_source = std::make_unique<mojo::StringDataSource>(
+          string_piece, mojo::StringDataSource::AsyncWritingMode::STRING_MAY_BE_INVALIDATED_BEFORE_COMPLETION);
+    }
 
     data_producer_ =
         std::make_unique<mojo::DataPipeProducer>(std::move(producer_handle));

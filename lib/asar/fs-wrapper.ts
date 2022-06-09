@@ -332,7 +332,13 @@ export const wrapFsWithAsar = (fs: Record<string, any>) => {
         throw createError(AsarError.NOT_FOUND, { asarPath, filePath });
       }
 
-      return path.join(realpathSync(asarPath, options), fileRealPath);
+      // TODO - Don't use realpathSync if archive not backed by file.
+      //        Currently this uses a hacky workaround if it throws.
+      try {
+        return path.join(realpathSync(asarPath, options), fileRealPath);
+      } catch {
+        return path.join(asarPath, fileRealPath);
+      }
     };
   };
 
@@ -547,18 +553,15 @@ export const wrapFsWithAsar = (fs: Record<string, any>) => {
         return fs.readFile(realPath, options, callback);
       }
 
-      const buffer = Buffer.alloc(info.size);
-      const fd = archive.getFdAndValidateIntegrityLater();
-      if (!(fd >= 0)) {
-        const error = createError(AsarError.NOT_FOUND, { asarPath, filePath });
-        nextTick(callback, [error]);
-        return;
-      }
-
       logASARAccess(asarPath, filePath, info.offset);
-      fs.read(fd, buffer, 0, info.size, info.offset, (error: Error) => {
-        validateBufferIntegrity(buffer, info.integrity);
-        callback(error, encoding ? buffer.toString(encoding) : buffer);
+      archive.read(info.offset, info.size).then((buf) => {
+        const buffer = Buffer.from(buf);
+        callback(null, encoding ? buffer.toString(encoding) : buffer);
+      }, (err) => {
+        const error: AsarErrorObject = new Error(`EINVAL, ${err.message} while reading ${filePath} in ${asarPath}`);
+        error.code = 'EINVAL';
+        error.errno = -22;
+        callback(error);
       });
     }
   }
@@ -612,14 +615,24 @@ export const wrapFsWithAsar = (fs: Record<string, any>) => {
     }
 
     const { encoding } = options;
-    const buffer = Buffer.alloc(info.size);
-    const fd = archive.getFdAndValidateIntegrityLater();
-    if (!(fd >= 0)) throw createError(AsarError.NOT_FOUND, { asarPath, filePath });
 
     logASARAccess(asarPath, filePath, info.offset);
-    fs.readSync(fd, buffer, 0, info.size, info.offset);
+    let arrayBuffer: ArrayBuffer;
+    try {
+      const result: ArrayBuffer | boolean = archive.readSync(info.offset, info.size);
+      if (result === false) {
+        throw createError(AsarError.NOT_FOUND, { asarPath, filePath });
+      }
+      arrayBuffer = result;
+    } catch (err: any) {
+      const error: AsarErrorObject = new Error(`EINVAL, ${err.message} while reading ${filePath} in ${asarPath}`);
+      error.code = 'EINVAL';
+      error.errno = -22;
+      throw error;
+    }
+    const buffer = Buffer.from(arrayBuffer);
     validateBufferIntegrity(buffer, info.integrity);
-    return (encoding) ? buffer.toString(encoding) : buffer;
+    return encoding ? buffer.toString(encoding) : buffer;
   };
 
   const { readdir } = fs;
@@ -731,12 +744,21 @@ export const wrapFsWithAsar = (fs: Record<string, any>) => {
       return [str, str.length > 0];
     }
 
-    const buffer = Buffer.alloc(info.size);
-    const fd = archive.getFdAndValidateIntegrityLater();
-    if (!(fd >= 0)) return [];
-
     logASARAccess(asarPath, filePath, info.offset);
-    fs.readSync(fd, buffer, 0, info.size, info.offset);
+    let arrayBuffer: ArrayBuffer;
+    try {
+      const result: ArrayBuffer | boolean = archive.readSync(info.offset, info.size);
+      if (result === false) {
+        throw createError(AsarError.NOT_FOUND, { asarPath, filePath });
+      }
+      arrayBuffer = result;
+    } catch (err: any) {
+      const error: AsarErrorObject = new Error(`EINVAL, ${err.message} while reading ${filePath} in ${asarPath}`);
+      error.code = 'EINVAL';
+      error.errno = -22;
+      throw error;
+    }
+    const buffer = Buffer.from(arrayBuffer);
     validateBufferIntegrity(buffer, info.integrity);
     const str = buffer.toString('utf8');
     return [str, str.length > 0];

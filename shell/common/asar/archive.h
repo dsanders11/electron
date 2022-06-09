@@ -12,6 +12,7 @@
 
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/files/memory_mapped_file.h"
 #include "base/synchronization/lock.h"
 #include "base/values.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -56,6 +57,7 @@ class Archive {
     bool is_link;
   };
 
+  explicit Archive(const base::FilePath& path, const uint8_t* data, size_t length);
   explicit Archive(const base::FilePath& path);
   virtual ~Archive();
 
@@ -93,13 +95,18 @@ class Archive {
   int GetUnsafeFD() const;
 
   base::FilePath path() const { return path_; }
+  bool has_file() const { return file_.IsValid(); }
+
+  const uint8_t* data() const { return data_; }
+  size_t length() const { return length_; }
 
  private:
   bool initialized_;
   bool header_validated_ = false;
   const base::FilePath path_;
-  base::File file_;
-  int fd_ = -1;
+  base::MemoryMappedFile file_;
+  const uint8_t* data_ = nullptr;
+  size_t length_ = 0;
   uint32_t header_size_ = 0;
   absl::optional<base::Value::Dict> header_;
 
