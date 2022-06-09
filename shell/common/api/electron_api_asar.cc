@@ -4,15 +4,46 @@
 
 #include <vector>
 
+#include "base/numerics/safe_math.h"
+#include "base/task/thread_pool.h"
 #include "gin/handle.h"
 #include "shell/common/asar/archive.h"
 #include "shell/common/asar/asar_util.h"
 #include "shell/common/gin_converters/file_path_converter.h"
 #include "shell/common/gin_helper/dictionary.h"
+#include "shell/common/gin_helper/function_template_extensions.h"
+#include "shell/common/gin_helper/promise.h"
 #include "shell/common/node_includes.h"
 #include "shell/common/node_util.h"
 
+#include "shell/common/api/postject.h"
+
+#if defined(__linux__) && !defined(__POSTJECT_NO_SHT_PTR)
+volatile void* _binary_postject_sht_start = (void*)POSTJECT_SHT_PTR_SENTINEL;
+#endif
+
 namespace {
+
+std::unique_ptr<asar::Archive> GetAsarArchive(const base::FilePath& path) {
+  if (path.BaseName().MaybeAsASCII() == "app.asar") {
+    struct postject_options postject_options;
+
+    postject_options_init(&postject_options);
+    postject_options.macho_framework_name = "Electron Framework";
+    postject_options.macho_segment_name = "__ELECTRON";
+
+    size_t size;
+    const void* ptr =
+        postject_find_resource("app_asar", &size, &postject_options);
+
+    if (ptr && size > 0) {
+      return std::make_unique<asar::Archive>(
+          path, reinterpret_cast<const uint8_t*>(ptr), size);
+    }
+  }
+
+  return std::make_unique<asar::Archive>(path);
+}
 
 class Archive : public node::ObjectWrap {
  public:
@@ -28,8 +59,8 @@ class Archive : public node::ObjectWrap {
     NODE_SET_PROTOTYPE_METHOD(tpl, "readdir", &Archive::Readdir);
     NODE_SET_PROTOTYPE_METHOD(tpl, "realpath", &Archive::Realpath);
     NODE_SET_PROTOTYPE_METHOD(tpl, "copyFileOut", &Archive::CopyFileOut);
-    NODE_SET_PROTOTYPE_METHOD(tpl, "getFdAndValidateIntegrityLater",
-                              &Archive::GetFD);
+    NODE_SET_PROTOTYPE_METHOD(tpl, "read", &Archive::Read);
+    NODE_SET_PROTOTYPE_METHOD(tpl, "readSync", &Archive::ReadSync);
 
     return tpl;
   }
@@ -52,7 +83,7 @@ class Archive : public node::ObjectWrap {
       return;
     }
 
-    auto archive = std::make_unique<asar::Archive>(path);
+    std::unique_ptr<asar::Archive> archive = GetAsarArchive(path);
     if (!archive->Init()) {
       isolate->ThrowException(v8::Exception::Error(node::FIXED_ONE_BYTE_STRING(
           isolate, "failed to initialize archive")));
@@ -181,16 +212,101 @@ class Archive : public node::ObjectWrap {
     args.GetReturnValue().Set(gin::ConvertToV8(isolate, new_path));
   }
 
-  // Return the file descriptor.
-  static void GetFD(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  static void ReadSync(const v8::FunctionCallbackInfo<v8::Value>& args) {
     auto* isolate = args.GetIsolate();
     auto* wrap = node::ObjectWrap::Unwrap<Archive>(args.Holder());
 
-    args.GetReturnValue().Set(gin::ConvertToV8(
-        isolate, wrap->archive_ ? wrap->archive_->GetUnsafeFD() : -1));
+    uint64_t offset;
+    if (!gin::ConvertFromV8(isolate, args[0], &offset)) {
+      args.GetReturnValue().Set(v8::False(isolate));
+      return;
+    }
+
+    uint64_t length;
+    if (!gin::ConvertFromV8(isolate, args[1], &length)) {
+      args.GetReturnValue().Set(v8::False(isolate));
+      return;
+    }
+
+    if (!wrap->archive_) {
+      args.GetReturnValue().Set(v8::False(isolate));
+      return;
+    }
+
+    base::CheckedNumeric<uint64_t> safe_offset(offset);
+    base::CheckedNumeric<uint64_t> safe_end = safe_offset + length;
+    if (!safe_end.IsValid() ||
+        safe_end.ValueOrDie() > wrap->archive_->length()) {
+      isolate->ThrowException(v8::Exception::Error(
+          node::FIXED_ONE_BYTE_STRING(isolate, "Out of bounds read")));
+      args.GetReturnValue().Set(v8::Local<v8::ArrayBuffer>());
+      return;
+    }
+    auto array_buffer = v8::ArrayBuffer::New(isolate, length);
+    auto backing_store = array_buffer->GetBackingStore();
+    memcpy(backing_store->Data(), wrap->archive_->data() + offset, length);
+    args.GetReturnValue().Set(array_buffer);
   }
 
-  std::unique_ptr<asar::Archive> archive_;
+  static void Read(const v8::FunctionCallbackInfo<v8::Value>& args) {
+    auto* isolate = args.GetIsolate();
+    auto* wrap = node::ObjectWrap::Unwrap<Archive>(args.Holder());
+
+    uint64_t offset;
+    if (!gin::ConvertFromV8(isolate, args[0], &offset)) {
+      args.GetReturnValue().Set(v8::False(isolate));
+      return;
+    }
+
+    uint64_t length;
+    if (!gin::ConvertFromV8(isolate, args[1], &length)) {
+      args.GetReturnValue().Set(v8::False(isolate));
+      return;
+    }
+
+    gin_helper::Promise<v8::Local<v8::ArrayBuffer>> promise(isolate);
+    v8::Local<v8::Promise> handle = promise.GetHandle();
+
+    base::CheckedNumeric<uint64_t> safe_offset(offset);
+    base::CheckedNumeric<uint64_t> safe_end = safe_offset + length;
+    if (!safe_end.IsValid() ||
+        safe_end.ValueOrDie() > wrap->archive_->length()) {
+      promise.RejectWithErrorMessage("Out of bounds read");
+      args.GetReturnValue().Set(handle);
+      return;
+    }
+
+    auto backing_store = v8::ArrayBuffer::NewBackingStore(isolate, length);
+    base::ThreadPool::PostTaskAndReplyWithResult(
+        FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
+        base::BindOnce(&Archive::ReadOnIO, isolate, wrap->archive_,
+                       std::move(backing_store), offset, length),
+        base::BindOnce(&Archive::ResolveReadOnUI, std::move(promise)));
+
+    args.GetReturnValue().Set(handle);
+  }
+
+  static std::unique_ptr<v8::BackingStore> ReadOnIO(
+      v8::Isolate* isolate,
+      std::shared_ptr<asar::Archive> archive,
+      std::unique_ptr<v8::BackingStore> backing_store,
+      uint64_t offset,
+      uint64_t length) {
+    memcpy(backing_store->Data(), archive->data() + offset, length);
+    return backing_store;
+  }
+
+  static void ResolveReadOnUI(
+      gin_helper::Promise<v8::Local<v8::ArrayBuffer>> promise,
+      std::unique_ptr<v8::BackingStore> backing_store) {
+    v8::HandleScope scope(promise.isolate());
+    v8::Context::Scope context_scope(promise.GetContext());
+    auto array_buffer =
+        v8::ArrayBuffer::New(promise.isolate(), std::move(backing_store));
+    promise.Resolve(array_buffer);
+  }
+
+  std::shared_ptr<asar::Archive> archive_;
 };
 
 static void InitAsarSupport(const v8::FunctionCallbackInfo<v8::Value>& args) {

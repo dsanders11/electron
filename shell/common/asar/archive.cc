@@ -165,76 +165,57 @@ Archive::FileInfo::FileInfo()
     : unpacked(false), executable(false), size(0), offset(0) {}
 Archive::FileInfo::~FileInfo() = default;
 
-Archive::Archive(const base::FilePath& path)
-    : initialized_(false), path_(path), file_(base::File::FILE_OK) {
-  base::ThreadRestrictions::ScopedAllowIO allow_io;
-  file_.Initialize(path_, base::File::FLAG_OPEN | base::File::FLAG_READ);
-#if BUILDFLAG(IS_WIN)
-  fd_ = _open_osfhandle(reinterpret_cast<intptr_t>(file_.GetPlatformFile()), 0);
-#elif BUILDFLAG(IS_POSIX)
-  fd_ = file_.GetPlatformFile();
-#endif
+Archive::Archive(const base::FilePath& path, const uint8_t* data, size_t length)
+    : initialized_(false), path_(path), data_(data), length_(length) {
 }
 
-Archive::~Archive() {
-#if BUILDFLAG(IS_WIN)
-  if (fd_ != -1) {
-    _close(fd_);
-    // Don't close the handle since we already closed the fd.
-    file_.TakePlatformFile();
-  }
-#endif
+Archive::Archive(const base::FilePath& path)
+    : initialized_(false), path_(path) {
   base::ThreadRestrictions::ScopedAllowIO allow_io;
-  file_.Close();
+  if (base::PathExists(path_) && !file_.Initialize(path_)) {
+    LOG(ERROR) << "Failed to open ASAR archive at '" << path_.value() << "'";
+  }
 }
+
+Archive::~Archive() {}
 
 bool Archive::Init() {
   // Should only be initialized once
   CHECK(!initialized_);
   initialized_ = true;
 
-  if (!file_.IsValid()) {
-    if (file_.error_details() != base::File::FILE_ERROR_NOT_FOUND) {
-      LOG(WARNING) << "Opening " << path_.value() << ": "
-                   << base::File::ErrorToString(file_.error_details());
-    }
+  if (!data_ && !file_.IsValid()) {
     return false;
+  } else if (file_.IsValid()) {
+    data_ = file_.data();
+    length_ = file_.length();
   }
 
-  std::vector<char> buf;
-  int len;
-
-  buf.resize(8);
-  {
-    base::ThreadRestrictions::ScopedAllowIO allow_io;
-    len = file_.ReadAtCurrentPos(buf.data(), buf.size());
-  }
-  if (len != static_cast<int>(buf.size())) {
-    PLOG(ERROR) << "Failed to read header size from " << path_.value();
+  if (length_ < 8) {
+    LOG(ERROR) << "Malformed ASAR file at '" << path_.value()
+               << "' (too short)";
     return false;
   }
 
   uint32_t size;
-  if (!base::PickleIterator(base::Pickle(buf.data(), buf.size()))
-           .ReadUInt32(&size)) {
-    LOG(ERROR) << "Failed to parse header size from " << path_.value();
+  base::PickleIterator size_pickle(
+      base::Pickle(reinterpret_cast<const char*>(data_), 8));
+  if (!size_pickle.ReadUInt32(&size)) {
+    LOG(ERROR) << "Failed to read header size at '" << path_.value() << "'";
     return false;
   }
 
-  buf.resize(size);
-  {
-    base::ThreadRestrictions::ScopedAllowIO allow_io;
-    len = file_.ReadAtCurrentPos(buf.data(), buf.size());
-  }
-  if (len != static_cast<int>(buf.size())) {
-    PLOG(ERROR) << "Failed to read header from " << path_.value();
+  if (length_ - 8 < size) {
+    LOG(ERROR) << "Malformed ASAR file at '" << path_.value()
+               << "' (incorrect header)";
     return false;
   }
 
+  base::PickleIterator header_pickle(
+      base::Pickle(reinterpret_cast<const char*>(data_ + 8), size));
   std::string header;
-  if (!base::PickleIterator(base::Pickle(buf.data(), buf.size()))
-           .ReadString(&header)) {
-    LOG(ERROR) << "Failed to parse header from " << path_.value();
+  if (!header_pickle.ReadString(&header)) {
+    LOG(ERROR) << "Failed to read header string at '" << path_.value() << "'";
     return false;
   }
 
@@ -266,7 +247,7 @@ bool Archive::Init() {
 
   absl::optional<base::Value> value = base::JSONReader::Read(header);
   if (!value || !value->is_dict()) {
-    LOG(ERROR) << "Failed to parse header";
+    LOG(ERROR) << "Header was not valid JSON at '" << path_.value() << "'";
     return false;
   }
 
@@ -385,11 +366,23 @@ bool Archive::CopyFileOut(const base::FilePath& path, base::FilePath* out) {
     return true;
   }
 
+  base::CheckedNumeric<uint64_t> safe_offset(info.offset);
+  auto safe_end = safe_offset + info.size;
+  if (!safe_end.IsValid() || safe_end.ValueOrDie() > length_)
+    return false;
+
   auto temp_file = std::make_unique<ScopedTemporaryFile>();
   base::FilePath::StringType ext = path.Extension();
-  if (!temp_file->InitFromFile(&file_, ext, info.offset, info.size,
-                               info.integrity))
+  if (!temp_file->Init(ext))
     return false;
+
+  base::File dest(temp_file->path(),
+                  base::File::FLAG_OPEN | base::File::FLAG_WRITE);
+  if (!dest.IsValid())
+    return false;
+
+  dest.WriteAtCurrentPos(
+      reinterpret_cast<const char*>(data_ + info.offset), info.size);
 
 #if BUILDFLAG(IS_POSIX)
   if (info.executable) {
@@ -401,10 +394,6 @@ bool Archive::CopyFileOut(const base::FilePath& path, base::FilePath* out) {
   *out = temp_file->path();
   external_files_[path.value()] = std::move(temp_file);
   return true;
-}
-
-int Archive::GetUnsafeFD() const {
-  return fd_;
 }
 
 }  // namespace asar

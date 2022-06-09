@@ -23,6 +23,8 @@
 #include "crypto/sha2.h"
 #include "shell/common/asar/archive.h"
 
+#include "shell/common/api/postject.h"
+
 namespace asar {
 
 namespace {
@@ -59,6 +61,27 @@ base::Lock& GetArchiveCacheLock() {
   return *lock;
 }
 
+std::shared_ptr<Archive> CreateAsarArchive(const base::FilePath& path) {
+  if (path.BaseName().MaybeAsASCII() == "app.asar") {
+    struct postject_options postject_options;
+
+    postject_options_init(&postject_options);
+    postject_options.macho_framework_name = "Electron Framework";
+    postject_options.macho_segment_name = "__ELECTRON";
+
+    size_t size;
+    const void* ptr =
+        postject_find_resource("app_asar", &size, &postject_options);
+
+    if (ptr && size > 0) {
+      return std::make_unique<asar::Archive>(
+          path, reinterpret_cast<const uint8_t*>(ptr), size);
+    }
+  }
+
+  return std::make_shared<Archive>(path);
+}
+
 std::shared_ptr<Archive> GetOrCreateAsarArchive(const base::FilePath& path) {
   base::AutoLock auto_lock(GetArchiveCacheLock());
   ArchiveMap& map = GetArchiveCache();
@@ -69,7 +92,7 @@ std::shared_ptr<Archive> GetOrCreateAsarArchive(const base::FilePath& path) {
     return lower->second;
 
   // if we can create it, return it
-  auto archive = std::make_shared<Archive>(path);
+  auto archive = CreateAsarArchive(path);
   if (archive->Init()) {
     map.try_emplace(lower, path, archive);
     return archive;
