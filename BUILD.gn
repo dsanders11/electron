@@ -892,6 +892,12 @@ if (is_mac) {
       "-rpath",
       "@loader_path/Libraries",
 
+      # Embed an ASAR
+      "-sectcreate",
+      "__ELECTRON",
+      "__app_asar",
+      "../../electron/embed_me.asar",
+
       # Required for exporting all symbols of libuv.
       "-Wl,-force_load,obj/third_party/electron_node/deps/uv/libuv.a",
     ]
