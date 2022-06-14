@@ -1275,6 +1275,7 @@ if (is_mac) {
       ldflags += [ "/DEF:" + rebase_path("build/electron.def", root_build_dir) ]
       inputs = [
         "shell/browser/resources/win/electron.ico",
+        "shell/browser/resources/win/embed_me.asar",
         "build/electron.def",
       ]
     }
