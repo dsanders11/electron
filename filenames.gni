@@ -45,6 +45,7 @@ filenames = {
     "shell/common/node_bindings_linux.cc",
     "shell/common/node_bindings_linux.h",
     "shell/common/platform_util_linux.cc",
+    "embedded_asar_note.S",
   ]
 
   lib_sources_linux_x11 = [
