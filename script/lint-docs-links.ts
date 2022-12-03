@@ -40,7 +40,7 @@ async function main () {
       }
 
       for (const diagnostic of diagnostics) {
-        console.log(`\tBroken link on line ${diagnostic.range.start.line}:`, diagnostic.message);
+        console.log(`\tBroken link on line ${diagnostic.range.start.line + 1}:`, diagnostic.message);
         errors = true;
       }
     }
