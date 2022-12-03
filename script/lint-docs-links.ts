@@ -4,7 +4,7 @@ import { createLanguageService, DiagnosticLevel, DiagnosticOptions, ILogger } fr
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 
-import { DocsWorkspace, MarkdownParser } from './lib/markdown';
+import { DocsWorkspace, MarkdownLinkComputer, MarkdownParser } from './lib/markdown';
 
 class NoOpLogger implements ILogger {
   log (): void {}
@@ -23,8 +23,9 @@ const diagnosticOptions: DiagnosticOptions = {
 async function main () {
   const workspace = new DocsWorkspace(path.resolve(__dirname, '..', 'docs'));
   const parser = new MarkdownParser();
+  const linkComputer = new MarkdownLinkComputer(workspace);
   const languageService = createLanguageService({
-    workspace, parser, logger: new NoOpLogger()
+    workspace, parser, logger: new NoOpLogger(), linkComputer
   });
 
   const cts = new CancellationTokenSource();
