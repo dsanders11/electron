@@ -2,11 +2,11 @@
 
 import * as path from 'path';
 
-import { createLanguageService, ILogger } from 'vscode-markdown-languageservice';
+import { createLanguageService, ILogger } from '@dsanders11/vscode-markdown-languageservice';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 
-import { DocsWorkspace, MarkdownParser } from './lib/markdown';
+import { DocsWorkspace, MarkdownLinkComputer, MarkdownParser } from './lib/markdown';
 
 class NoOpLogger implements ILogger {
   log (): void {}
@@ -20,8 +20,9 @@ async function main () {
 
   const workspace = new DocsWorkspace(path.resolve(__dirname, '..', 'docs'));
   const parser = new MarkdownParser();
+  const linkComputer = new MarkdownLinkComputer(workspace);
   const languageService = createLanguageService({
-    workspace, parser, logger: new NoOpLogger()
+    workspace, parser, logger: new NoOpLogger(), linkComputer
   });
 
   const uri = URI.file(path.resolve(process.argv[2]));

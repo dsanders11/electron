@@ -15,7 +15,7 @@ import {
   IWorkspace,
   MdLink,
   MdLinkKind
-} from 'vscode-markdown-languageservice';
+} from '@dsanders11/vscode-markdown-languageservice';
 import { Emitter, Range } from 'vscode-languageserver';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { URI } from 'vscode-uri';

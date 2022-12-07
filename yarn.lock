@@ -111,10 +111,10 @@
   resolved "https://registry.yarnpkg.com/@discoveryjs/json-ext/-/json-ext-0.5.7.tgz#1d572bfbbe14b7704e0ba0f39b74815b84870d70"
   integrity sha512-dBVuXR082gk3jsFp7Rd/JI4kytwGHecnCoTtXFb7DB6CNHp4rg5k1bhg0nWdLGLnOV71lmDzGQaLMy8iPLY0pw==
 
-"@dsanders11/vscode-markdown-languageservice@^0.3.0-alpha.3":
-  version "0.3.0-alpha.3"
-  resolved "https://registry.yarnpkg.com/@dsanders11/vscode-markdown-languageservice/-/vscode-markdown-languageservice-0.3.0-alpha.3.tgz#4e6b361ed7d0fa4747f5a02cddf2a0998c711ac7"
-  integrity sha512-XIs0dqYeduUjA/t7RLwRPEsbIXw0bDD18wjaLb+mB70Wv2THuOA3v6WZys3DINQ5WDc8tX4W+2v1PHsbrB9C+A==
+"@dsanders11/vscode-markdown-languageservice@^0.3.0-alpha.4":
+  version "0.3.0-alpha.4"
+  resolved "https://registry.yarnpkg.com/@dsanders11/vscode-markdown-languageservice/-/vscode-markdown-languageservice-0.3.0-alpha.4.tgz#cd80b82142a2c10e09b5f36a93c3ea65b7d2a7f9"
+  integrity sha512-MHp/CniEkzJb1CAw/bHwucuImaICrcIuohEFamTW8sJC2jhKCnbYblwJFZ3OOS3wTYZbzFIa8WZ4Dn5yL2E7jg==
   dependencies:
     "@vscode/l10n" "^0.0.10"
     picomatch "^2.3.1"

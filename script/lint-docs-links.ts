@@ -1,6 +1,6 @@
 import * as path from 'path';
 
-import { createLanguageService, DiagnosticLevel, DiagnosticOptions, ILogger } from 'vscode-markdown-languageservice';
+import { createLanguageService, DiagnosticLevel, DiagnosticOptions, ILogger } from '@dsanders11/vscode-markdown-languageservice';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 

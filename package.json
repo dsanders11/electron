@@ -5,7 +5,7 @@
   "description": "Build cross platform desktop apps with JavaScript, HTML, and CSS",
   "devDependencies": {
     "@azure/storage-blob": "^12.9.0",
-    "@dsanders11/vscode-markdown-languageservice": "^0.3.0-alpha.3",
+    "@dsanders11/vscode-markdown-languageservice": "^0.3.0-alpha.4",
     "@electron/asar": "^3.2.1",
     "@electron/docs-parser": "^1.0.0",
     "@electron/typescript-definitions": "^8.10.0",
