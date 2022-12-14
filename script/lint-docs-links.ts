@@ -1,6 +1,7 @@
 import * as path from 'path';
 
 import { createLanguageService, DiagnosticLevel, DiagnosticOptions, ILogger } from '@dsanders11/vscode-markdown-languageservice';
+import fetch from 'node-fetch';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 
@@ -20,6 +21,18 @@ const diagnosticOptions: DiagnosticOptions = {
   validateUnusedLinkDefinitions: DiagnosticLevel.ignore
 };
 
+async function checkLink (link: string) {
+  try {
+    const response = await fetch(link);
+    // console.log(link, response.status, response.statusText);
+    if (response.status !== 200) {
+      console.log('Broken link', link, response.status, response.statusText);
+    }
+  } catch {
+    console.log('Broken link', link);
+  }
+}
+
 async function main () {
   const workspace = new DocsWorkspace(path.resolve(__dirname, '..', 'docs'));
   const parser = new MarkdownParser();
@@ -31,9 +44,20 @@ async function main () {
   const cts = new CancellationTokenSource();
   let errors = false;
 
+  const links = new Set<string>();
+
   try {
     // Collect diagnostics for all documents in the workspace
     for (const document of await workspace.getAllMarkdownDocuments()) {
+      for (let link of await languageService.getDocumentLinks(document, cts.token)) {
+        if (link.target === undefined) {
+          link = (await languageService.resolveDocumentLink(link, cts.token)) ?? link;
+        }
+
+        if (link.target && link.target.startsWith('http')) {
+          links.add(link.target);
+        }
+      }
       const diagnostics = await languageService.computeDiagnostics(document, diagnosticOptions, cts.token);
 
       if (diagnostics.length) {
@@ -48,6 +72,8 @@ async function main () {
   } finally {
     cts.dispose();
   }
+
+  await Promise.all(Array.from(links).map(checkLink));
 
   if (errors) {
     process.exit(1);
