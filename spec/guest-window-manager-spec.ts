@@ -1,7 +1,10 @@
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, screen } from 'electron';
 import { expect, assert } from 'chai';
+
+import { emittedOnce } from './events-helpers';
+import { areColorsSimilar, captureScreen, HexColors, getPixelColor } from './screen-helpers';
+import { delay } from './spec-helpers';
 import { closeAllWindows } from './window-helpers';
-const { emittedOnce } = require('./events-helpers');
 
 describe('webContents.setWindowOpenHandler', () => {
   let browserWindow: BrowserWindow;
@@ -193,5 +196,27 @@ describe('webContents.setWindowOpenHandler', () => {
     browserWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     browserWindow.webContents.executeJavaScript("window.open('https://127.0.0.1')");
     expect(await browserWindow.webContents.executeJavaScript('42')).to.equal(42);
+  });
+
+  it('should not make child window background transparent', (done) => {
+    browserWindow.webContents.setWindowOpenHandler(() => ({ action: 'allow' }));
+
+    browserWindow.webContents.on('did-create-window', async (childWindow) => {
+      const display = screen.getPrimaryDisplay();
+      childWindow.setBounds(display.bounds);
+      await childWindow.webContents.executeJavaScript("const meta = document.createElement('meta'); meta.name = 'color-scheme'; meta.content = 'dark'; document.head.appendChild(meta);");
+      await delay();
+      const screenCapture = await captureScreen();
+      const centerColor = getPixelColor(screenCapture, {
+        x: display.size.width / 2,
+        y: display.size.height / 2
+      });
+
+      // color-scheme is set to dark so background should not be white
+      expect(areColorsSimilar(centerColor, HexColors.WHITE)).to.be.false();
+      done();
+    });
+
+    browserWindow.webContents.executeJavaScript("window.open('about:blank') && true");
   });
 });
