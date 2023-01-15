@@ -1,8 +1,9 @@
 import * as path from 'path';
 import * as url from 'url';
-import { BrowserWindow, session, ipcMain, app, WebContents } from 'electron/main';
+import { BrowserWindow, session, ipcMain, app, WebContents, screen } from 'electron/main';
 import { closeAllWindows } from './window-helpers';
 import { emittedOnce, emittedUntil } from './events-helpers';
+import { areColorsSimilar, captureScreen, HexColors, getPixelColor } from './screen-helpers';
 import { ifit, ifdescribe, delay, defer, itremote, useRemoteContext } from './spec-helpers';
 import { expect } from 'chai';
 import * as http from 'http';
@@ -193,6 +194,30 @@ describe('<webview> tag', function () {
         expect(visibilityState).to.equal('visible');
         expect(hidden).to.be.false();
       });
+    });
+
+    it('should not have a transparent default background', async () => {
+      const display = screen.getPrimaryDisplay();
+
+      const w = new BrowserWindow({
+        ...display.bounds,
+        transparent
+      });
+      const readyToShowSignal = emittedOnce(w, 'ready-to-show');
+      w.loadFile(path.join(fixtures, 'pages', 'webview-color-scheme.html'));
+      await readyToShowSignal;
+      w.show();
+
+      await delay();
+      const screenCapture = await captureScreen();
+      const centerColor = getPixelColor(screenCapture, {
+        x: display.size.width / 2,
+        y: display.size.height / 2
+      });
+      w.close();
+
+      // color-scheme is set to dark so background should not be white
+      expect(areColorsSimilar(centerColor, HexColors.WHITE)).to.be.false();
     });
   });
 
