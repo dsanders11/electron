@@ -3,7 +3,7 @@ import { expect, assert } from 'chai';
 
 import { emittedOnce } from './events-helpers';
 import { areColorsSimilar, captureScreen, HexColors, getPixelColor } from './screen-helpers';
-import { delay } from './spec-helpers';
+import { ifit } from './spec-helpers';
 import { closeAllWindows } from './window-helpers';
 
 describe('webContents.setWindowOpenHandler', () => {
@@ -198,23 +198,28 @@ describe('webContents.setWindowOpenHandler', () => {
     expect(await browserWindow.webContents.executeJavaScript('42')).to.equal(42);
   });
 
-  it('should not make child window background transparent', (done) => {
+  // Linux and arm64 platforms (WOA and macOS) do not return any capture sources
+  ifit(process.platform === 'darwin' && process.arch === 'x64')('should not make child window background transparent', (done) => {
     browserWindow.webContents.setWindowOpenHandler(() => ({ action: 'allow' }));
 
     browserWindow.webContents.on('did-create-window', async (childWindow) => {
       const display = screen.getPrimaryDisplay();
       childWindow.setBounds(display.bounds);
-      await childWindow.webContents.executeJavaScript("const meta = document.createElement('meta'); meta.name = 'color-scheme'; meta.content = 'dark'; document.head.appendChild(meta);");
-      await delay();
+      await emittedOnce(childWindow, 'show');
+      await childWindow.webContents.executeJavaScript("const meta = document.createElement('meta'); meta.name = 'color-scheme'; meta.content = 'dark'; document.head.appendChild(meta); true;");
       const screenCapture = await captureScreen();
       const centerColor = getPixelColor(screenCapture, {
         x: display.size.width / 2,
         y: display.size.height / 2
       });
 
-      // color-scheme is set to dark so background should not be white
-      expect(areColorsSimilar(centerColor, HexColors.WHITE)).to.be.false();
-      done();
+      try {
+        // color-scheme is set to dark so background should not be white
+        expect(areColorsSimilar(centerColor, HexColors.WHITE)).to.be.false();
+        done();
+      } catch (err) {
+        done(err);
+      }
     });
 
     browserWindow.webContents.executeJavaScript("window.open('about:blank') && true");

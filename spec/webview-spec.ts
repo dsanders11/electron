@@ -196,13 +196,11 @@ describe('<webview> tag', function () {
       });
     });
 
-    it('should not have a transparent default background', async () => {
+    // Linux and arm64 platforms (WOA and macOS) do not return any capture sources
+    ifit(process.platform === 'darwin' && process.arch === 'x64')('should not have a transparent default background', async () => {
       const display = screen.getPrimaryDisplay();
 
-      const w = new BrowserWindow({
-        ...display.bounds,
-        transparent
-      });
+      const w = new BrowserWindow({ ...display.bounds });
       const readyToShowSignal = emittedOnce(w, 'ready-to-show');
       w.loadFile(path.join(fixtures, 'pages', 'webview-color-scheme.html'));
       await readyToShowSignal;
