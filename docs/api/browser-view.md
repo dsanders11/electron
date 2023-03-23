@@ -33,7 +33,7 @@ app.whenReady().then(() => {
 ### `new BrowserView([options])` _Experimental_
 
 * `options` Object (optional)
-  * `webPreferences` [WebPreferences](structures/web-preferences.md) (optional) - Settings of web page's features.
+  * `webPreferences` [WebPreferences](structures/web-preferences.md?inline) (optional) - Settings of web page's features.
 
 ### Instance Properties
 
