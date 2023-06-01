@@ -14,6 +14,7 @@
 #include "base/values.h"
 #include "content/public/browser/device_service.h"
 #include "content/public/browser/web_contents.h"
+#include "electron/shell/browser/serial/serial_chooser_context.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "shell/browser/api/electron_api_session.h"
 #include "shell/browser/electron_permission_manager.h"
@@ -23,18 +24,18 @@
 
 namespace electron {
 
-constexpr char kPortNameKey[] = "name";
+constexpr char kPortIdKey[] = "portId";
+constexpr char kPortNameKey[] = "portName";
+constexpr char kDisplayNameKey[] = "displayName";
 constexpr char kTokenKey[] = "token";
+constexpr char kVendorIdKey[] = "vendorId";
+constexpr char kProductIdKey[] = "productId";
+constexpr char kSerialNumberKey[] = "serialNumber";
 #if BUILDFLAG(IS_WIN)
-const char kDeviceInstanceIdKey[] = "device_instance_id";
-#else
-const char kVendorIdKey[] = "vendor_id";
-const char kProductIdKey[] = "product_id";
-const char kSerialNumberKey[] = "serial_number";
-#if BUILDFLAG(IS_MAC)
-const char kUsbDriverKey[] = "usb_driver";
-#endif  // BUILDFLAG(IS_MAC)
-#endif  // BUILDFLAG(IS_WIN)
+constexpr char kDeviceInstanceIdKey[] = "deviceInstanceId";
+#elif BUILDFLAG(IS_MAC)
+constexpr char kUsbDriverKey[] = "usbDriverName";
+#endif
 
 std::string EncodeToken(const base::UnguessableToken& token) {
   const uint64_t data[2] = {token.GetHighForSerialization(),
@@ -44,38 +45,6 @@ std::string EncodeToken(const base::UnguessableToken& token) {
       base::StringPiece(reinterpret_cast<const char*>(&data[0]), sizeof(data)),
       &buffer);
   return buffer;
-}
-
-base::Value PortInfoToValue(const device::mojom::SerialPortInfo& port) {
-  base::Value::Dict value;
-  if (port.display_name && !port.display_name->empty())
-    value.Set(kPortNameKey, *port.display_name);
-  else
-    value.Set(kPortNameKey, port.path.LossyDisplayName());
-
-  if (!SerialChooserContext::CanStorePersistentEntry(port)) {
-    value.Set(kTokenKey, EncodeToken(port.token));
-    return base::Value(std::move(value));
-  }
-
-#if BUILDFLAG(IS_WIN)
-  // Windows provides a handy device identifier which we can rely on to be
-  // sufficiently stable for identifying devices across restarts.
-  value.Set(kDeviceInstanceIdKey, port.device_instance_id);
-#else
-  DCHECK(port.has_vendor_id);
-  value.Set(kVendorIdKey, port.vendor_id);
-  DCHECK(port.has_product_id);
-  value.Set(kProductIdKey, port.product_id);
-  DCHECK(port.serial_number);
-  value.Set(kSerialNumberKey, *port.serial_number);
-
-#if BUILDFLAG(IS_MAC)
-  DCHECK(port.usb_driver_name && !port.usb_driver_name->empty());
-  value.Set(kUsbDriverKey, *port.usb_driver_name);
-#endif  // BUILDFLAG(IS_MAC)
-#endif  // BUILDFLAG(IS_WIN)
-  return base::Value(std::move(value));
 }
 
 SerialChooserContext::SerialChooserContext(ElectronBrowserContext* context)
@@ -88,6 +57,43 @@ SerialChooserContext::~SerialChooserContext() {
     observer.OnSerialChooserContextShutdown();
     DCHECK(!port_observer_list_.HasObserver(&observer));
   }
+}
+
+// static
+base::Value SerialChooserContext::PortInfoToValue(
+    const device::mojom::SerialPortInfo& port,
+    bool include_token) {
+  base::Value::Dict value;
+  value.Set(kPortIdKey, port.token.ToString());
+  value.Set(kPortNameKey, port.path.BaseName().LossyDisplayName());
+  if (port.display_name && !port.display_name->empty()) {
+    value.Set(kDisplayNameKey, *port.display_name);
+  }
+  if (include_token && !SerialChooserContext::CanStorePersistentEntry(port)) {
+    value.Set(kTokenKey, EncodeToken(port.token));
+    return base::Value(std::move(value));
+  }
+  if (port.has_vendor_id) {
+    value.Set(kVendorIdKey, base::StringPrintf("%u", port.vendor_id));
+  }
+  if (port.has_product_id) {
+    value.Set(kProductIdKey, base::StringPrintf("%u", port.product_id));
+  }
+  if (port.serial_number && !port.serial_number->empty()) {
+    value.Set(kSerialNumberKey, *port.serial_number);
+  }
+#if BUILDFLAG(IS_MAC)
+  if (port.usb_driver_name && !port.usb_driver_name->empty()) {
+    value.Set(kUsbDriverKey, *port.usb_driver_name);
+  }
+#elif BUILDFLAG(IS_WIN)
+  // Windows provides a handy device identifier which we can rely on to be
+  // sufficiently stable for identifying devices across restarts.
+  if (!port.device_instance_id.empty()) {
+    value.Set(kDeviceInstanceIdKey, port.device_instance_id);
+  }
+#endif
+  return base::Value(std::move(value));
 }
 
 void SerialChooserContext::GrantPortPermission(

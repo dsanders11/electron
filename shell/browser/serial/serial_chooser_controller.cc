@@ -16,45 +16,9 @@
 #include "shell/browser/serial/serial_chooser_context_factory.h"
 #include "shell/common/gin_converters/callback_converter.h"
 #include "shell/common/gin_converters/content_converter.h"
+#include "shell/common/gin_converters/serial_port_info_converter.h"
 #include "shell/common/gin_helper/dictionary.h"
 #include "ui/base/l10n/l10n_util.h"
-
-namespace gin {
-
-template <>
-struct Converter<device::mojom::SerialPortInfoPtr> {
-  static v8::Local<v8::Value> ToV8(
-      v8::Isolate* isolate,
-      const device::mojom::SerialPortInfoPtr& port) {
-    gin_helper::Dictionary dict = gin::Dictionary::CreateEmpty(isolate);
-    dict.Set("portId", port->token.ToString());
-    dict.Set("portName", port->path.BaseName().LossyDisplayName());
-    if (port->display_name && !port->display_name->empty()) {
-      dict.Set("displayName", *port->display_name);
-    }
-    if (port->has_vendor_id) {
-      dict.Set("vendorId", base::StringPrintf("%u", port->vendor_id));
-    }
-    if (port->has_product_id) {
-      dict.Set("productId", base::StringPrintf("%u", port->product_id));
-    }
-    if (port->serial_number && !port->serial_number->empty()) {
-      dict.Set("serialNumber", *port->serial_number);
-    }
-#if BUILDFLAG(IS_MAC)
-    if (port->usb_driver_name && !port->usb_driver_name->empty()) {
-      dict.Set("usbDriverName", *port->usb_driver_name);
-    }
-#elif BUILDFLAG(IS_WIN)
-    if (!port->device_instance_id.empty()) {
-      dict.Set("deviceInstanceId", port->device_instance_id);
-    }
-#endif
-    return gin::ConvertToV8(isolate, dict);
-  }
-};
-
-}  // namespace gin
 
 namespace electron {
 

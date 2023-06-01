@@ -30,16 +30,14 @@ class Value;
 
 namespace electron {
 
-#if BUILDFLAG(IS_WIN)
-extern const char kDeviceInstanceIdKey[];
-#else
 extern const char kVendorIdKey[];
 extern const char kProductIdKey[];
 extern const char kSerialNumberKey[];
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_WIN)
+extern const char kDeviceInstanceIdKey[];
+#elif BUILDFLAG(IS_MAC)
 extern const char kUsbDriverKey[];
 #endif  // BUILDFLAG(IS_MAC)
-#endif  // BUILDFLAG(IS_WIN)
 
 class SerialChooserContext : public KeyedService,
                              public device::mojom::SerialPortManagerClient {
@@ -57,6 +55,9 @@ class SerialChooserContext : public KeyedService,
   // disable copy
   SerialChooserContext(const SerialChooserContext&) = delete;
   SerialChooserContext& operator=(const SerialChooserContext&) = delete;
+
+  static base::Value PortInfoToValue(const device::mojom::SerialPortInfo& port,
+                                     bool include_token = true);
 
   // Serial-specific interface for granting and checking permissions.
   void GrantPortPermission(const url::Origin& origin,

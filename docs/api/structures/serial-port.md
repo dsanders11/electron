@@ -6,5 +6,5 @@
 * `vendorId` string - Optional USB vendor ID.
 * `productId` string - Optional USB product ID.
 * `serialNumber` string - The USB device serial number.
-* `usbDriverName` string (optional) - Represents a single serial port on macOS can be enumerated by multiple drivers.
-* `deviceInstanceId` string (optional) - A stable identifier on Windows that can be used for device permissions.
+* `usbDriverName` string (optional) _macOS_ - Represents a single serial port on macOS can be enumerated by multiple drivers.
+* `deviceInstanceId` string (optional) _Windows_ - A stable identifier on Windows that can be used for device permissions.

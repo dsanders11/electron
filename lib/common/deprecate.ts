@@ -110,14 +110,15 @@ export function removeProperty<T, K extends (keyof T & string)>(object: T, remov
 }
 
 // change the name of a property
-export function renameProperty<T, K extends (keyof T & string)>(object: T, oldName: string, newName: K): T {
+export function renameProperty<T, K extends (keyof T & string)>(object: T, oldName: string, newName: K, options?: { normalize: { get?: (val: any) => any, set?: (val: any) => any } }): T {
   const warn = warnOnce(oldName, newName);
 
   // if the new property isn't there yet,
   // inject it and warn about it
   if ((oldName in object) && !(newName in object)) {
     warn();
-    object[newName] = (object as any)[oldName];
+    const oldValue = (object as any)[oldName];
+    object[newName] = options?.normalize?.set ? options.normalize.set(oldValue) : oldValue;
   }
 
   // wrap the deprecated property in an accessor to warn
@@ -125,11 +126,12 @@ export function renameProperty<T, K extends (keyof T & string)>(object: T, oldNa
   return Object.defineProperty(object, oldName, {
     get: () => {
       warn();
-      return object[newName];
+      const newValue = object[newName];
+      return options?.normalize?.get ? options.normalize.get(newValue) : newValue;
     },
     set: value => {
       warn();
-      object[newName] = value;
+      object[newName] = options?.normalize?.set ? options.normalize.set(value) : value;
     }
   });
 }

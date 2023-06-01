@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 import { BrowserWindow, WebContents, webFrameMain, session, ipcMain, app, protocol, webContents } from 'electron/main';
+import * as deprecate from '../lib/common/deprecate';
 import { closeAllWindows } from './lib/window-helpers';
 import * as https from 'https';
 import * as http from 'http';
@@ -2435,6 +2436,44 @@ describe('iframe using HTML fullscreen API while window is OS-fullscreened', () 
 });
 
 describe('navigator.serial', () => {
+  const snakeCaseSerialPortNames = [
+    'device_instance_id',
+    'name',
+    'product_id',
+    'serial_number',
+    'usb_driver',
+    'vendor_id'
+  ];
+
+  function isSerialPort (val: any): val is Electron.SerialPort {
+    const keys = Object.keys(val);
+
+    // Mandatory props, the rest are optional
+    if (!keys.includes('portId') || !keys.includes('portName')) {
+      return false;
+    }
+
+    return keys.every((key): boolean => {
+      // TODO(dsanders11): Remove this once the
+      // deprecated snake_case names are removed
+      if (snakeCaseSerialPortNames.includes(key)) {
+        return true;
+      }
+      switch (key as keyof Electron.SerialPort) {
+        case 'deviceInstanceId':
+        case 'displayName':
+        case 'portId':
+        case 'portName':
+        case 'productId':
+        case 'serialNumber':
+        case 'usbDriverName':
+        case 'vendorId':
+          return true;
+        // No default case so that exhaustiveness checking happens
+      }
+    });
+  }
+
   let w: BrowserWindow;
   before(async () => {
     w = new BrowserWindow({
@@ -2453,7 +2492,9 @@ describe('navigator.serial', () => {
 
   after(closeAllWindows);
   afterEach(() => {
+    deprecate.setHandler(null);
     session.defaultSession.setPermissionCheckHandler(null);
+    session.defaultSession.setDevicePermissionHandler(null);
     session.defaultSession.removeAllListeners('select-serial-port');
   });
 
@@ -2465,6 +2506,7 @@ describe('navigator.serial', () => {
 
   it('does not return a port when permission denied', async () => {
     w.webContents.session.on('select-serial-port', (event, portList, webContents, callback) => {
+      expect(portList.every((port) => isSerialPort(port))).to.be.true();
       callback(portList[0].portId);
     });
     session.defaultSession.setPermissionCheckHandler(() => false);
@@ -2483,6 +2525,7 @@ describe('navigator.serial', () => {
   it('returns a port when select-serial-port event is defined', async () => {
     let havePorts = false;
     w.webContents.session.on('select-serial-port', (event, portList, webContents, callback) => {
+      expect(portList.every((port) => isSerialPort(port))).to.be.true();
       if (portList.length > 0) {
         havePorts = true;
         callback(portList[0].portId);
@@ -2502,6 +2545,7 @@ describe('navigator.serial', () => {
     let havePorts = false;
 
     w.webContents.session.on('select-serial-port', (event, portList, webContents, callback) => {
+      expect(portList.every((port) => isSerialPort(port))).to.be.true();
       if (portList.length > 0) {
         havePorts = true;
         callback(portList[0].portId);
@@ -2521,6 +2565,7 @@ describe('navigator.serial', () => {
     let havePorts = false;
 
     w.webContents.session.on('select-serial-port', (event, portList, webContents, callback) => {
+      expect(portList.every((port) => isSerialPort(port))).to.be.true();
       if (portList.length > 0) {
         havePorts = true;
         callback(portList[0].portId);
@@ -2530,6 +2575,7 @@ describe('navigator.serial', () => {
     });
 
     w.webContents.session.on('serial-port-revoked', (event, details) => {
+      expect(isSerialPort(details.port)).to.be.true();
       forgottenPortFromEvent = details.port;
     });
 
@@ -2558,6 +2604,37 @@ describe('navigator.serial', () => {
         }
       }
     }
+  });
+
+  it('warns on accessing snake_case names in setDevicePermissionHandler', async function () {
+    const warnings: string[] = [];
+    deprecate.setHandler(warning => warnings.push(warning));
+
+    let havePorts = false;
+    let selectFired = false;
+    let gotDevicePerms = false;
+    w.webContents.session.on('select-serial-port', (event, portList, webContents, callback) => {
+      selectFired = true;
+      expect(portList.every((port) => isSerialPort(port))).to.be.true();
+      if (portList.length > 0) {
+        havePorts = true;
+        callback(portList[0].portId);
+      } else {
+        callback('');
+      }
+    });
+    session.defaultSession.setDevicePermissionHandler((details) => {
+      gotDevicePerms = true;
+      expect(isSerialPort(details.device)).to.be.true();
+      // Check for deprecation warning
+      console.log((details.device as any).product_id);
+      expect(warnings).to.have.lengthOf(1);
+      return true;
+    });
+    await getPorts();
+    if (!havePorts) this.skip();
+    expect(selectFired).to.be.true();
+    expect(gotDevicePerms).to.be.true();
   });
 });
 
